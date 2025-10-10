@@ -1,0 +1,64 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ShortR</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<main class="wrap">
+<img src="/logo.png" alt="ShortR" class="logo" />
+<form id="f">
+<label>URL à raccourcir</label>
+<input id="target" type="url" placeholder="https://…" required />
+
+
+<div class="row">
+<div>
+<label>Code personnalisé (optionnel)</label>
+<input id="code" required pattern="[A-Za-z0-9_\-]{4,32}" placeholder="ex: promo-2025" />
+</div>
+<div>
+<label>Titre (optionnel)</label>
+<input id="title" placeholder="Campagne print" />
+</div>
+</div>
+
+
+<button>Raccourcir</button>
+</form>
+
+
+<div id="result" class="result" hidden>
+<p><strong>Lien court :</strong> <a id="short" target="_blank" rel="noopener" class="link"></a></p>
+<img id="qr" alt="QR Code" />
+<p class="muted">Voir les stats ? Uutilisez la <a href="/stats.html">page stats</a>.</p>
+</div>
+</main>
+
+
+<script>
+const $ = s => document.querySelector(s);
+$('#f').addEventListener('submit', async (e) => {
+e.preventDefault();
+const payload = {
+target: $('#target').value.trim(),
+customCode: $('#code').value.trim() || undefined,
+title: $('#title').value.trim() || undefined
+};
+const r = await fetch('/api/shorten', {
+method: 'POST', headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify(payload)
+});
+const data = await r.json();
+if (!r.ok) {
+alert(data.error || 'Erreur');
+return;
+}
+$('#result').hidden = false;
+$('#short').textContent = data.shortUrl;
+$('#short').href = data.shortUrl;
+$('#qr').src = data.qrUrl;
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+    // Formatter par défaut pour YAML (workspace-local)
+    "[yaml]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+
+    // Activer le format automatique à la sauvegarde pour ce workspace
+    "editor.formatOnSave": true,
+
+    // Assurer que le format YAML est activé si l'extension le propose
+    "yaml.format.enable": true
+}
