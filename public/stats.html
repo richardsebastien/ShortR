@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Stats du lien court</title>
+  <title>ShortR | Stats du lien court</title>
   <link rel="stylesheet" href="/style.css" />
   <style>
     .card { background:#0e1533;border:1px solid #2b3355;border-radius:12px;padding:16px;margin:12px 0; }
@@ -18,7 +18,9 @@
 </head>
 <body>
   <main class="wrap">
-    <img src="/logo.png" alt="ShortR" class="logo" />
+    <a href="https://shortr.richardsebastien.fr" target="_blank" rel="noopener">
+      <img src="/logo.png" alt="ShortR" class="logo" />
+    </a>
     <h1>Stats du lien court</h1>
 
     <div class="card">
@@ -31,7 +33,7 @@
     <div id="content" hidden>
       <div class="card">
         <h2 id="h-code"></h2>
-        <p><strong>Cible :</strong> <a id="h-target" target="_blank" rel="noopener"></a></p>
+        <p><strong>Cible :</strong> <a id="h-target" class="link" target="_blank" rel="noopener"></a></p>
         <p class="muted">Créé le <span id="h-created"></span> · Actif : <span id="h-active"></span></p>
         <div class="grid">
           <div class="card">
@@ -80,8 +82,6 @@
       e.preventDefault();
       const code = codeInput.value.trim();
       if (!code) return;
-      history.replaceState(null, '', '/' + code + '+');
-      console.log("Fetching stats for code:", code);
       fetchAndRender(code);
     });
 

@@ -94,6 +94,9 @@ app.get('/qr/:code.png', async (req, res) => {
 	}
 });
 
+// Healthcheck
+app.get('/health', (req, res) => res.json({ ok: true, at: new Date().toISOString() }));
+
 // Redirection + logging
 app.get('/:code', async (req, res) => {
 	try {
