@@ -422,6 +422,7 @@ app.get('/api/stats-public/:code', async (req, res) => {
 
 // On peut lier sur localhost, Passenger reverse-proxy depuis Apache
 const port = pickPort();
-app.listen(port, '127.0.0.1', () => {
+// Bind to 0.0.0.0 so Docker port mapping can expose the service to the host
+app.listen(port, '0.0.0.0', () => {
   console.log(`URLR prêt (port interne ${port})`);
 });
