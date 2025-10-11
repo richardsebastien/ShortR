@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Connexion - ShortR</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<main class="wrap">
+    <h1>Connexion</h1>
+    <form id="f">
+        <label>Email</label>
+        <input id="email" type="email" required />
+        <label>Mot de passe</label>
+        <input id="password" type="password" required />
+        <button style="margin-top: 16px;">Se connecter</button>
+    </form>
+    <p id="error-msg" style="color: red;"></p>
+    <p>Pas encore de compte ? <a href="/register.html">Inscrivez-vous</a>.</p>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const errorMsg = $('#error-msg');
+$('#f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorMsg.textContent = '';
+    const payload = {
+        email: $('#email').value,
+        password: $('#password').value
+    };
+    const r = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const data = await r.json();
+    if (!r.ok) {
+        errorMsg.textContent = data.error || 'Erreur';
+        return;
+    }
+    window.location.href = '/dashboard.html';
+});
+</script>
+</body>
+</html>

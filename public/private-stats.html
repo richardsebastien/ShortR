@@ -18,18 +18,9 @@
 </head>
 <body>
   <main class="wrap">
-    <a href="https://shortr.richardsebastien.fr" target="_blank" rel="noopener">
-      <img src="/logo.png" alt="ShortR" class="logo" />
-    </a>
+    <a href="/dashboard.html">Retour au tableau de bord</a>
     <h1>Stats du lien court</h1>
-
-    <div class="card">
-      <form id="search" class="row">
-  <input id="code" type="text" placeholder="Entrez le code (ex: promo-2025)" required pattern="[A-Za-z0-9_\-]{4,32}">
-        <button>Afficher</button>
-      </form>
-    </div>
-
+    <p id="error-msg" style="color: red;"></p>
     <div id="content" hidden>
       <div class="card">
         <h2 id="h-code"></h2>
@@ -74,32 +65,34 @@
     </div>
   </main>
 
-  <script>
+<script>
     const $ = s => document.querySelector(s);
-    const codeInput = $('#code');
+    const errorMsg = $('#error-msg');
 
-    $('#search').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const code = codeInput.value.trim();
-      if (!code) return;
-      window.location.hash = code;
-      fetchAndRender(code);
-    });
-
-    // Check for hash on page load
     window.addEventListener('DOMContentLoaded', () => {
         if (window.location.hash) {
             const code = window.location.hash.substring(1);
-            codeInput.value = code;
             fetchAndRender(code);
+        } else {
+            errorMsg.textContent = 'Code de lien non spécifié.';
         }
     });
 
     async function fetchAndRender(code) {
-      const r = await fetch('/api/stats-public/' + encodeURIComponent(code));
+      const r = await fetch('/api/stats-private/' + encodeURIComponent(code));
+      if (r.status === 401) {
+          errorMsg.textContent = 'Vous devez être connecté pour voir cette page.';
+          setTimeout(() => window.location.href = '/login.html', 2000);
+          return;
+      }
+      if (r.status === 403) {
+          errorMsg.textContent = "Vous n'avez pas la permission de voir les statistiques de ce lien.";
+          setTimeout(() => window.location.href = '/dashboard.html', 2000);
+          return;
+      }
       const data = await r.json();
       if (!r.ok || !data.ok) {
-        alert(data.error || 'Code introuvable');
+        errorMsg.textContent = data.error || 'Code introuvable';
         return;
       }
 
@@ -208,6 +201,6 @@
         ctx.fillText(d, x, H-6);
       });
     }
-  </script>
+</script>
 </body>
 </html>
