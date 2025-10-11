@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tableau de bord - ShortR</title>
+    <link rel="stylesheet" href="/style.css" />
+    <style>
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #2b3355; padding: 8px 12px; text-align: left; }
+        th { background-color: #0e1533; }
+    </style>
+</head>
+<body>
+<main class="wrap">
+    <h1>Tableau de bord</h1>
+    <p>Voici la liste de vos liens raccourcis.</p>
+    <table id="links-table">
+        <thead>
+            <tr>
+                <th>Lien court</th>
+                <th>Cible</th>
+                <th>Titre</th>
+                <th>Créé le</th>
+                <th>Stats</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Les lignes seront insérées ici par le script -->
+        </tbody>
+    </table>
+    <button id="logout-btn" style="margin-top: 20px;">Déconnexion</button>
+</main>
+<script>
+    const $ = s => document.querySelector(s);
+
+    async function fetchLinks() {
+        const r = await fetch('/api/user/links');
+        if (r.status === 401) {
+            window.location.href = '/login.html';
+            return;
+        }
+        const links = await r.json();
+        const tbody = $('#links-table tbody');
+        tbody.innerHTML = '';
+        links.forEach(link => {
+            const row = tbody.insertRow();
+            row.innerHTML = `
+                <td><a href="/${link.code}" target="_blank">${link.code}</a></td>
+                <td>${link.target}</td>
+                <td>${link.title || ''}</td>
+                <td>${new Date(link.created_at).toLocaleString()}</td>
+                <td><a href="/private-stats.html#${link.code}">Voir</a></td>
+            `;
+        });
+    }
+
+    $('#logout-btn').addEventListener('click', async () => {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        window.location.href = '/';
+    });
+
+    fetchLinks();
+</script>
+</body>
+</html>
