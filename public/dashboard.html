@@ -35,7 +35,7 @@
     const $ = s => document.querySelector(s);
 
     async function fetchLinks() {
-        const r = await fetch('/api/user/links');
+    const r = await fetch('/api/user/links', { credentials: 'same-origin' });
         if (r.status === 401) {
             window.location.href = '/login.html';
             return;
@@ -56,7 +56,7 @@
     }
 
     $('#logout-btn').addEventListener('click', async () => {
-        await fetch('/api/auth/logout', { method: 'POST' });
+        await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
         window.location.href = '/';
     });
 

@@ -15,7 +15,7 @@
         <button style="margin-top: 16px;">Se connecter</button>
     </form>
     <p id="error-msg" style="color: red;"></p>
-    <p>Pas encore de compte ? <a href="/register.html">Inscrivez-vous</a>.</p>
+    <p>Pas encore de compte ? <a class="link" href="/register.html">Inscrivez-vous</a>.</p>
 </main>
 <script>
 const $ = s => document.querySelector(s);
@@ -28,7 +28,7 @@ $('#f').addEventListener('submit', async (e) => {
         password: $('#password').value
     };
     const r = await fetch('/api/auth/login', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
         body: JSON.stringify(payload)
     });
     const data = await r.json();
