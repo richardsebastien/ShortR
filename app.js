@@ -8,11 +8,24 @@ import { pool } from './db.js';
 import { isValidUrl, isValidCode } from './utils/validate.js';
 import session from 'express-session';
 import bcrypt from 'bcryptjs';
+import helmet from 'helmet';
 import fetch from 'node-fetch';
 
 dotenv.config();
 
 const app = express();
+app.use(helmet());
+
+// Enforce HTTPS in production
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    if (req.secure) {
+      next();
+    } else {
+      res.redirect('https://' + req.headers.host + req.url);
+    }
+  });
+}
 
 app.use(express.json());
 app.use(morgan('tiny'));
