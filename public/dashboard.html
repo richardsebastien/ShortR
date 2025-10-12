@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Tableau de bord - ShortR</title>
     <link rel="stylesheet" href="/style.css" />
+<link rel="stylesheet" href="/nav.css" />
     <style>
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { border: 1px solid #2b3355; padding: 8px 12px; text-align: left; }
@@ -29,7 +30,6 @@
             <!-- Les lignes seront insérées ici par le script -->
         </tbody>
     </table>
-    <button id="logout-btn" style="margin-top: 20px;">Déconnexion</button>
 </main>
 <script>
     const $ = s => document.querySelector(s);
@@ -55,12 +55,8 @@
         });
     }
 
-    $('#logout-btn').addEventListener('click', async () => {
-        await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
-        window.location.href = '/';
-    });
-
     fetchLinks();
 </script>
+<script src="/nav.js"></script>
 </body>
 </html>
