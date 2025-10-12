@@ -20,6 +20,17 @@
 <body>
   <main class="wrap">
     <h1>Stats du lien court</h1>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <style>
+        .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div {
+            background-color: rgba(4, 120, 87, 0.8);
+        }
+        .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large {
+            background-color: rgba(4, 120, 87, 0.5);
+        }
+    </style>
     <p id="error-msg" style="color: red;"></p>
     <div id="content" hidden>
       <div class="card">
@@ -62,9 +73,16 @@
           <tbody></tbody>
         </table>
       </div>
+
+      <div class="card">
+        <h3>Carte des clics</h3>
+        <div id="map" style="height: 400px; background-color: #1a202c; border-radius: 8px;"></div>
+      </div>
     </div>
   </main>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
     const $ = s => document.querySelector(s);
     const errorMsg = $('#error-msg');
@@ -149,6 +167,46 @@
         tr.append(t1,t2,t3);
         recentBody.appendChild(tr);
       }
+
+      // Map
+      renderMap(code);
+    }
+
+    async function renderMap(code) {
+        const map = L.map('map').setView([20, 0], 2);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+
+        const r = await fetch(`/api/stats-private/${code}/map`);
+        if (!r.ok) return;
+        const locations = await r.json();
+
+        const markers = L.markerClusterGroup({
+            iconCreateFunction: function(cluster) {
+                const count = cluster.getChildCount();
+                let size = 'small';
+                if (count > 10) size = 'medium';
+                if (count > 100) size = 'large';
+                return L.divIcon({
+                    html: `<div><span>${count}</span></div>`,
+                    className: `marker-cluster marker-cluster-${size}`,
+                    iconSize: L.point(40, 40)
+                });
+            }
+        });
+
+        for (const loc of locations) {
+            if (loc.lat && loc.lon) {
+                const marker = L.marker([loc.lat, loc.lon], {
+                    title: `${loc.country_code} (${loc.count} clicks)`
+                });
+                markers.addLayer(marker);
+            }
+        }
+        map.addLayer(markers);
     }
 
     function drawChart(timeline) {

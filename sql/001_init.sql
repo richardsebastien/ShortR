@@ -19,6 +19,9 @@ referrer TEXT NULL,
 utm_source VARCHAR(100) NULL,
 utm_medium VARCHAR(100) NULL,
 utm_campaign VARCHAR(100) NULL,
+country_code CHAR(2) NULL,
+lat DECIMAL(10, 8) NULL,
+lon DECIMAL(11, 8) NULL,
 INDEX (url_id),
 CONSTRAINT fk_clicks_url
 FOREIGN KEY (url_id) REFERENCES urls(id)
