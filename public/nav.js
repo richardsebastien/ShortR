@@ -1,4 +1,10 @@
 document.addEventListener('DOMContentLoaded', async () => {
+    const head = document.head;
+    const footerStyle = document.createElement('link');
+    footerStyle.rel = 'stylesheet';
+    footerStyle.href = '/footer.css';
+    head.appendChild(footerStyle);
+
     const navContainer = document.createElement('div');
     document.body.prepend(navContainer);
 
@@ -39,4 +45,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
     }
+
+    const footer = document.createElement('footer');
+    footer.innerHTML = `
+        <div class="footer-links">
+            <a href="/terms.html">Conditions d'utilisation</a>
+            <a href="/privacy.html">Politique de confidentialité</a>
+        </div>
+    `;
+    document.body.appendChild(footer);
 });
