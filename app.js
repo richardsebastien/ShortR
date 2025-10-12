@@ -8,6 +8,7 @@ import { pool } from './db.js';
 import { isValidUrl, isValidCode } from './utils/validate.js';
 import session from 'express-session';
 import bcrypt from 'bcryptjs';
+import fetch from 'node-fetch';
 
 dotenv.config();
 
@@ -214,12 +215,29 @@ app.get('/:code', async (req, res) => {
 		const utm_campaign = u.searchParams.get('utm_campaign');
 
 		// On loggue de façon asynchrone sans bloquer la redirection
-		pool
-			.query(
-				'INSERT INTO clicks (url_id, ip, user_agent, referrer, utm_source, utm_medium, utm_campaign) VALUES (?, ?, ?, ?, ?, ?, ?)',
-				[url.id, ip, ua, ref, utm_source, utm_medium, utm_campaign]
-			)
-			.catch(console.error);
+		(async () => {
+			try {
+				let countryCode = null, lat = null, lon = null;
+
+				// Localhost IPs for testing
+				const localIPs = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+				if (ip && !localIPs.includes(ip)) {
+					const geo = await fetch(`http://ip-api.com/json/${ip}?fields=status,countryCode,lat,lon`).then(r => r.json());
+					if (geo && geo.status === 'success') {
+						countryCode = geo.countryCode;
+						lat = geo.lat;
+						lon = geo.lon;
+					}
+				}
+
+				await pool.query(
+					'INSERT INTO clicks (url_id, ip, user_agent, referrer, utm_source, utm_medium, utm_campaign, country_code, lat, lon) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+					[url.id, ip, ua, ref, utm_source, utm_medium, utm_campaign, countryCode, lat, lon]
+				);
+			} catch (e) {
+				console.error('Failed to log click', e)
+			}
+		})();
 
 		return res.redirect(302, url.target);
 	} catch (e) {
@@ -333,6 +351,34 @@ app.get('/api/stats-private/:code', async (req, res) => {
             recent
         });
 
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.get('/api/stats-private/:code/map', async (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    try {
+        const { code } = req.params;
+        const [[url]] = await pool.query('SELECT id, user_id FROM urls WHERE code = ?', [code]);
+        if (!url) {
+            return res.status(404).json({ error: 'Not found' });
+        }
+        if (url.user_id !== req.session.userId) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const [locations] = await pool.query(
+            `SELECT country_code, lat, lon, COUNT(*) as count
+             FROM clicks
+             WHERE url_id = ? AND country_code IS NOT NULL AND lat IS NOT NULL AND lon IS NOT NULL
+             GROUP BY country_code, lat, lon`,
+            [url.id]
+        );
+        res.json(locations);
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: 'Server error' });
