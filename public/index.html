@@ -3,15 +3,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>ShortR</title>
 <link rel="stylesheet" href="/style.css" />
+<link rel="stylesheet" href="/nav.css" />
 </head>
 <body>
-<header style="padding: 1rem 0; text-align: center;">
-    <a class="link" href="/login.html">Connexion</a> | <a class="link" href="/register.html">Inscription</a>
-</header>
 <main class="wrap">
-<a ref="https://shortr.richardsebastien.fr" target="_blank" rel="noopener">
-<img src="/logo.png" alt="ShortR" class="logo" />
-	</a>
 <form id="f">
 <label>URL à raccourcir</label>
 <input id="target" type="url" placeholder="https://…" required />
@@ -65,5 +60,6 @@ $('#short').href = data.shortUrl;
 $('#qr').src = data.qrUrl;
 });
 </script>
+<script src="/nav.js"></script>
 </body>
 </html>

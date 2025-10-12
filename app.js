@@ -90,6 +90,14 @@ app.post('/api/auth/logout', (req, res) => {
     });
 });
 
+app.get('/api/auth/status', (req, res) => {
+    if (req.session.userId) {
+        res.json({ loggedIn: true });
+    } else {
+        res.json({ loggedIn: false });
+    }
+});
+
 app.get('/api/auth/me', (req, res) => {
     if (req.session.userId) {
         res.json({ userId: req.session.userId });
