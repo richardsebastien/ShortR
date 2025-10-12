@@ -15,6 +15,11 @@ const app = express();
 
 app.use(express.json());
 app.use(morgan('tiny'));
+// If deployed behind a reverse proxy (like Apache/nginx on o2switch), enable trust proxy
+// so that express knows the original protocol (req.secure) and express-session can set secure cookies correctly.
+if (process.env.TRUST_PROXY === '1' || process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 if (!process.env.SESSION_SECRET) {
     throw new Error('SESSION_SECRET environment variable is not set');
 }
@@ -22,7 +27,8 @@ app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7 } // 7 days
+  // Use sameSite=lax which works well for most auth flows and allows the cookie on top-level navigations
+  cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 24 * 7 } // 7 days
 }));
 
 // Servir les fichiers statiques (public/index.html sera accessible à `/`)
