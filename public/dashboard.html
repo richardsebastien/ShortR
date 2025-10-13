@@ -24,6 +24,7 @@
                 <th>Titre</th>
                 <th>Créé le</th>
                 <th>Stats</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -35,7 +36,7 @@
     const $ = s => document.querySelector(s);
 
     async function fetchLinks() {
-    const r = await fetch('/api/user/links', { credentials: 'same-origin' });
+        const r = await fetch('/api/user/links', { credentials: 'same-origin' });
         if (r.status === 401) {
             window.location.href = '/login.html';
             return;
@@ -45,15 +46,56 @@
         tbody.innerHTML = '';
         links.forEach(link => {
             const row = tbody.insertRow();
+            row.dataset.code = link.code;
             row.innerHTML = `
                 <td><a class="link" href="/${link.code}" target="_blank">${link.code}</a></td>
                 <td>${link.target}</td>
                 <td>${link.title || ''}</td>
                 <td>${new Date(link.created_at).toLocaleString()}</td>
                 <td><a class="link" href="/private-stats.html#${link.code}">Voir</a></td>
+                <td>
+                    <button class="action-btn edit-btn">Modifier</button>
+                    <button class="action-btn delete-btn">Supprimer</button>
+                </td>
             `;
         });
     }
+
+    $('#links-table').addEventListener('click', async (e) => {
+        const target = e.target;
+        if (target.classList.contains('action-btn')) {
+            const row = target.closest('tr');
+            const code = row.dataset.code;
+
+            if (target.classList.contains('delete-btn')) {
+                if (confirm(`Voulez-vous vraiment supprimer le lien ${code} ?`)) {
+                    const res = await fetch(`/api/links/${code}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        row.remove();
+                    } else {
+                        const { error } = await res.json();
+                        alert(`Erreur: ${error}`);
+                    }
+                }
+            } else if (target.classList.contains('edit-btn')) {
+                const newCode = prompt(`Entrez le nouveau code pour ${code}:`, code);
+                if (newCode && newCode !== code) {
+                    const res = await fetch(`/api/links/${code}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ newCode })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        // Refresh the list to show the new code
+                        fetchLinks();
+                    } else {
+                        alert(`Erreur: ${data.error}`);
+                    }
+                }
+            }
+        }
+    });
 
     fetchLinks();
 </script>
