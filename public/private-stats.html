@@ -127,8 +127,8 @@
       // Boutons d'export
       const exportButtons = $('#export-buttons');
       exportButtons.innerHTML = `
-          <a href="/api/stats-private/${code}/export/csv" class="button" download>Export CSV</a>
-          <a href="/api/stats-private/${code}/export/xlsx" class="button" download>Export XLSX</a>
+          <a class="link" href="/api/stats-private/${code}/export/csv" class="button" download>Export CSV</a>
+          <a class="link" href="/api/stats-private/${code}/export/xlsx" class="button" download>Export XLSX</a>
       `;
       $('#h-target').textContent = data.url.target;
       $('#h-target').href = data.url.target;
