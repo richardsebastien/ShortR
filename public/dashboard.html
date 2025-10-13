@@ -46,11 +46,11 @@
         links.forEach(link => {
             const row = tbody.insertRow();
             row.innerHTML = `
-                <td><a href="/${link.code}" target="_blank">${link.code}</a></td>
+                <td><a class="link" href="/${link.code}" target="_blank">${link.code}</a></td>
                 <td>${link.target}</td>
                 <td>${link.title || ''}</td>
                 <td>${new Date(link.created_at).toLocaleString()}</td>
-                <td><a href="/private-stats.html#${link.code}">Voir</a></td>
+                <td><a class="link" href="/private-stats.html#${link.code}">Voir</a></td>
             `;
         });
     }
