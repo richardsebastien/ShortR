@@ -9,6 +9,8 @@ import { isValidUrl, isValidCode } from './utils/validate.js';
 import session from 'express-session';
 import bcrypt from 'bcryptjs';
 import fetch from 'node-fetch';
+import { Parser } from 'json2csv';
+import xlsx from 'xlsx';
 
 dotenv.config();
 
@@ -65,6 +67,67 @@ app.post('/api/auth/register', async (req, res) => {
         res.status(201).json({ message: 'User created' });
     } catch (e) {
         console.error(e);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.delete('/api/links/:code', async (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    try {
+        const { code } = req.params;
+        const [[url]] = await pool.query('SELECT id, user_id FROM urls WHERE code = ?', [code]);
+
+        if (!url) {
+            return res.status(404).json({ error: 'Link not found' });
+        }
+
+        if (url.user_id !== req.session.userId) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        await pool.query('DELETE FROM urls WHERE id = ?', [url.id]);
+
+        res.status(204).send(); // No Content
+    } catch (e) {
+        console.error('Error deleting link:', e);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.put('/api/links/:code', async (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    try {
+        const { code } = req.params;
+        const { newCode } = req.body;
+
+        if (!newCode || !isValidCode(newCode)) {
+            return res.status(400).json({ error: 'Invalid new code' });
+        }
+
+        const [[url]] = await pool.query('SELECT id, user_id FROM urls WHERE code = ?', [code]);
+
+        if (!url) {
+            return res.status(404).json({ error: 'Link not found' });
+        }
+
+        if (url.user_id !== req.session.userId) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const [[existing]] = await pool.query('SELECT id FROM urls WHERE code = ?', [newCode]);
+        if (existing) {
+            return res.status(409).json({ error: 'New code already used' });
+        }
+
+        await pool.query('UPDATE urls SET code = ? WHERE id = ?', [newCode, url.id]);
+
+        res.json({ message: 'Link updated successfully', newCode });
+    } catch (e) {
+        console.error('Error updating link:', e);
         res.status(500).json({ error: 'Server error' });
     }
 });
@@ -384,6 +447,50 @@ app.get('/api/stats-private/:code/map', async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 });
+
+// Generic export function
+async function handleExport(req, res, format) {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    try {
+        const { code } = req.params;
+        const [[url]] = await pool.query('SELECT id, user_id FROM urls WHERE code = ?', [code]);
+
+        if (!url) {
+            return res.status(404).json({ error: 'Not found' });
+        }
+
+        if (url.user_id !== req.session.userId) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const [clicks] = await pool.query('SELECT * FROM clicks WHERE url_id = ? ORDER BY ts DESC', [url.id]);
+
+        if (format === 'csv') {
+            const json2csvParser = new Parser();
+            const csv = json2csvParser.parse(clicks);
+            res.header('Content-Type', 'text/csv');
+            res.attachment(`${code}-stats.csv`);
+            res.send(csv);
+        } else if (format === 'xlsx') {
+            const worksheet = xlsx.utils.json_to_sheet(clicks);
+            const workbook = xlsx.utils.book_new();
+            xlsx.utils.book_append_sheet(workbook, worksheet, 'Clicks');
+            const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+            res.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.attachment(`${code}-stats.xlsx`);
+            res.send(buffer);
+        }
+    } catch (e) {
+        console.error(`Error exporting ${format}:`, e);
+        res.status(500).json({ error: 'Server error during export' });
+    }
+}
+
+app.get('/api/stats-private/:code/export/csv', (req, res) => handleExport(req, res, 'csv'));
+app.get('/api/stats-private/:code/export/xlsx', (req, res) => handleExport(req, res, 'xlsx'));
 
 
 // ===== Fin stats publiques =====
