@@ -1,22 +1,24 @@
 <!doctype html>
+<html lang="fr">
+<head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Connexion - ShortR</title>
+<title data-translate="login.title">Connexion - ShortR</title>
 <link rel="stylesheet" href="/style.css" />
 <link rel="stylesheet" href="/nav.css" />
 </head>
 <body>
 <main class="wrap">
-    <h1>Connexion</h1>
+    <h1 data-translate="login.heading">Connexion</h1>
     <form id="f">
-        <label>Email</label>
+        <label data-translate="login.label.email">Email</label>
         <input id="email" type="email" required />
-        <label>Mot de passe</label>
+        <label data-translate="login.label.password">Mot de passe</label>
         <input id="password" type="password" required />
-        <button style="margin-top: 16px;">Se connecter</button>
+        <button style="margin-top: 16px;" data-translate="login.button.login">Se connecter</button>
     </form>
     <p id="error-msg" style="color: red;"></p>
-    <p>Pas encore de compte ? <a class="link" href="/register.html">Inscrivez-vous</a>.</p>
+    <p><span data-translate="login.no_account">Pas encore de compte ?</span> <a class="link" href="/register.html" data-translate="login.register_link">Inscrivez-vous</a>.</p>
 </main>
 <script>
 const $ = s => document.querySelector(s);

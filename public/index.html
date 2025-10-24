@@ -1,37 +1,39 @@
 <!doctype html>
+<html lang="fr">
+<head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>ShortR</title>
+<title data-translate="index.title">ShortR</title>
 <link rel="stylesheet" href="/style.css" />
 <link rel="stylesheet" href="/nav.css" />
 </head>
 <body>
 <main class="wrap">
 <form id="f">
-<label>URL à raccourcir</label>
+<label data-translate="index.label.url">URL à raccourcir</label>
 <input id="target" type="url" placeholder="https://…" required />
 
 
 <div class="row">
 <div>
-<label>Code personnalisé (optionnel)</label>
+<label data-translate="index.label.custom_code">Code personnalisé (optionnel)</label>
 <input id="code" required pattern="[A-Za-z0-9_\-]{4,32}" placeholder="ex: promo-2025" />
 </div>
 <div>
-<label>Titre (optionnel)</label>
+<label data-translate="index.label.title">Titre (optionnel)</label>
 <input id="title" placeholder="Campagne print" />
 </div>
 </div>
 
 
-<button style="margin-top: 16px;">Raccourcir</button>
+<button style="margin-top: 16px;" data-translate="index.button.shorten">Raccourcir</button>
 </form>
 
 
 <div id="result" class="result" hidden>
-<p><strong>Lien court :</strong> <a id="short" target="_blank" rel="noopener" class="link"></a></p>
+<p><strong data-translate="index.result.short_link">Lien court :</strong> <a id="short" target="_blank" rel="noopener" class="link"></a></p>
 <img id="qr" alt="QR Code" />
-<p class="muted">Voir les stats ? Uutilisez la <a href="/stats.html">page stats</a>.</p>
+<p class="muted"><span data-translate="index.result.stats">Voir les stats ? Uutilisez la</span> <a href="/stats.html" data-translate="index.result.stats_link">page stats</a>.</p>
 </div>
 </main>
 
