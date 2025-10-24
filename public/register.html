@@ -1,22 +1,24 @@
 <!doctype html>
+<html lang="fr">
+<head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Inscription - ShortR</title>
+<title data-translate="register.title">Inscription - ShortR</title>
 <link rel="stylesheet" href="/style.css" />
 <link rel="stylesheet" href="/nav.css" />
 </head>
 <body>
 <main class="wrap">
-    <h1>Inscription</h1>
+    <h1 data-translate="register.heading">Inscription</h1>
     <form id="f">
-        <label>Email</label>
+        <label data-translate="register.label.email">Email</label>
         <input id="email" type="email" required />
-        <label>Mot de passe (8 caractères minimum)</label>
+        <label data-translate="register.label.password">Mot de passe (8 caractères minimum)</label>
         <input id="password" type="password" required minlength="8" />
-        <button style="margin-top: 16px;">S'inscrire</button>
+        <button style="margin-top: 16px;" data-translate="register.button.register">S'inscrire</button>
     </form>
     <p id="error-msg" style="color: red;"></p>
-    <p>Déjà un compte ? <a class="link" href="/login.html">Connectez-vous</a>.</p>
+    <p><span data-translate="register.already_account">Déjà un compte ?</span> <a class="link" href="/login.html" data-translate="register.login_link">Connectez-vous</a>.</p>
 </main>
 <script>
 const $ = s => document.querySelector(s);
@@ -37,7 +39,7 @@ $('#f').addEventListener('submit', async (e) => {
         errorMsg.textContent = data.error || 'Erreur';
         return;
     }
-    alert('Inscription réussie ! Vous pouvez maintenant vous connecter.');
+    alert(getTranslation('register.success'));
     window.location.href = '/login.html';
 });
 </script>

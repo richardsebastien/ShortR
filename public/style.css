@@ -1,10 +1,33 @@
 :root {
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    --bg-color: #0b1020;
+    --text-color: #e6ebff;
+    --input-bg-color: #0e1533;
+    --input-border-color: #2b3355;
+    --button-bg-color: #3b82f6;
+    --button-text-color: white;
+    --link-color: #3b82f6;
+    --result-bg-color: #0e1533;
+    --result-border-color: #2b3355;
+    --muted-color: #888;
+}
+
+.light-theme {
+    --bg-color: #f0f2f5;
+    --text-color: #333;
+    --input-bg-color: #fff;
+    --input-border-color: #ccc;
+    --button-bg-color: #3b82f6;
+    --button-text-color: white;
+    --link-color: #3b82f6;
+    --result-bg-color: #fff;
+    --result-border-color: #ccc;
+    --muted-color: #555;
 }
 
 body {
-    background: #0b1020;
-    color: #e6ebff;
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }
 
 .wrap {
@@ -31,9 +54,9 @@ input {
     width: 100%;
     padding: 12px 14px;
     border-radius: 10px;
-    border: 1px solid #2b3355;
-    background: #0e1533;
-    color: #e6ebff;
+    border: 1px solid var(--input-border-color);
+    background: var(--input-bg-color);
+    color: var(--text-color);
     box-sizing: border-box;
 }
 
@@ -41,8 +64,8 @@ button {
     padding: 12px 16px;
     border: 0;
     border-radius: 10px;
-    background: #3b82f6;
-    color: white;
+    background: var(--button-bg-color);
+    color: var(--button-text-color);
     font-weight: 700;
     cursor: pointer;
 }
@@ -66,8 +89,8 @@ button:hover {
 
 .result {
     margin-top: 24px;
-    background: #0e1533;
-    border: 1px solid #2b3355;
+    background: var(--result-bg-color);
+    border: 1px solid var(--result-border-color);
     border-radius: 12px;
     padding: 16px;
 }
@@ -81,7 +104,7 @@ button:hover {
 }
 
 .link {
-    color: #3b82f6;
+    color: var(--link-color);
     word-break: break-all;
 }
 
@@ -90,7 +113,7 @@ button:hover {
 }
 
 .muted {
-    color: #888;
+    color: var(--muted-color);
     font-size: 14px;
     margin-top: 8px;
 }
