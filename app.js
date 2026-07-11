@@ -176,6 +176,53 @@ app.get('/api/auth/me', (req, res) => {
     }
 });
 
+// Forgot password / Request reset token
+app.post('/api/auth/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ error: 'Email is required' });
+        }
+        const [[user]] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        const token = nanoid(32);
+        // Expiration in 1 hour
+        const expires = new Date(Date.now() + 3600000);
+        await pool.query('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?', [token, expires, email]);
+
+        const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
+        const resetLink = `${base}/reset-password.html?token=${token}`;
+        console.log(`Password reset requested for ${email}. Link: ${resetLink}`);
+
+        res.json({ message: 'Reset link generated', resetLink, token });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Reset password using token
+app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+        const { token, password } = req.body;
+        if (!token || !password || password.length < 8) {
+            return res.status(400).json({ error: 'Token and password (min 8 chars) are required' });
+        }
+        const [[user]] = await pool.query('SELECT id FROM users WHERE reset_token = ? AND reset_token_expires > NOW()', [token]);
+        if (!user) {
+            return res.status(400).json({ error: 'Invalid or expired reset token' });
+        }
+        const passwordHash = await bcrypt.hash(password, 10);
+        await pool.query('UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?', [passwordHash, user.id]);
+        res.json({ message: 'Password reset successfully' });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 
 // Create a short URL
 app.post('/api/shorten', createLimiter, async (req, res) => {
