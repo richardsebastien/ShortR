@@ -92,13 +92,24 @@ function setLanguage(lang) {
     updateText();
 }
 
+function getDefaultLanguage() {
+    const saved = localStorage.getItem('language');
+    if (saved) return saved;
+    const navLang = navigator.language || navigator.userLanguage || 'fr';
+    const langCode = navLang.substring(0, 2).toLowerCase();
+    return (langCode === 'fr') ? 'fr' : 'en';
+}
+
 function getTranslation(key) {
-    const lang = localStorage.getItem('language') || 'fr';
+    const lang = getDefaultLanguage();
     return translations[lang][key] || key;
 }
 
+// Export helper for external use (e.g. nav.js)
+window.getDefaultLanguage = getDefaultLanguage;
+
 function updateText() {
-    const lang = localStorage.getItem('language') || 'fr';
+    const lang = getDefaultLanguage();
     const elements = document.querySelectorAll('[data-translate]');
     elements.forEach(el => {
         const key = el.getAttribute('data-translate');

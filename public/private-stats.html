@@ -7,12 +7,12 @@
   <link rel="stylesheet" href="/style.css" />
 <link rel="stylesheet" href="/nav.css" />
   <style>
-    .card { background:#0e1533;border:1px solid #2b3355;border-radius:12px;padding:16px;margin:12px 0; }
+    .card { background: var(--result-bg-color, #0e1533); border: 1px solid var(--result-border-color, #2b3355); color: var(--text-color, #fff); border-radius:12px; padding:16px; margin:12px 0; }
     .grid { display:grid; gap:12px; grid-template-columns: repeat(2,1fr); }
     .muted { opacity:.8; font-size:14px; }
     canvas { width:100%; max-width:800px; height:240px; }
     table { width:100%; border-collapse: collapse; }
-    th, td { border-bottom:1px solid #2b3355; padding:8px; text-align:left; }
+    th, td { border-bottom:1px solid var(--result-border-color, #2b3355); padding:8px; text-align:left; }
     .row { display:flex; gap:8px; align-items:center; }
     input[type=text]{ flex:1; }
   </style>
@@ -244,7 +244,8 @@
       const pad = 24;
       const plotW = W - pad*2;
       const plotH = H - pad*2;
-      ctx.strokeStyle = 'rgba(255,255,255,.3)';
+      const isLight = document.documentElement.classList.contains('light-theme');
+      ctx.strokeStyle = isLight ? 'rgba(0,0,0,.15)' : 'rgba(255,255,255,.3)';
       ctx.beginPath();
       ctx.moveTo(pad, H-pad);
       ctx.lineTo(W-pad, H-pad);
@@ -262,7 +263,7 @@
       }
 
       // Labels grossiers: début / milieu / fin
-      ctx.fillStyle = 'rgba(255,255,255,.75)';
+      ctx.fillStyle = isLight ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.75)';
       ctx.font = '12px system-ui';
       const labelIdx = [0, Math.floor(days.length/2), days.length-1];
       labelIdx.forEach(idx => {

@@ -81,7 +81,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Sync language select dropdown and add event listener
     const langSelect = document.getElementById('lang-select');
     if (langSelect) {
-        const savedLang = localStorage.getItem('language') || 'fr';
+        const savedLang = (typeof getDefaultLanguage === 'function')
+            ? getDefaultLanguage()
+            : (localStorage.getItem('language') || 'fr');
         langSelect.value = savedLang;
         langSelect.addEventListener('change', () => {
             setLanguage(langSelect.value);
