@@ -8,11 +8,22 @@ import { pool } from './db.js';
 import { isValidUrl, isValidCode } from './utils/validate.js';
 import session from 'express-session';
 import bcrypt from 'bcryptjs';
+import nodemailer from 'nodemailer';
 import fetch from 'node-fetch';
 import { Parser } from 'json2csv';
 import xlsx from 'xlsx';
 
 dotenv.config();
+
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'localhost',
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: Number(process.env.SMTP_PORT) === 465, // true for 465, false for other ports
+    auth: {
+        user: process.env.SMTP_USER || '',
+        pass: process.env.SMTP_PASS || ''
+    }
+});
 
 const app = express();
 
@@ -194,9 +205,40 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
         const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
         const resetLink = `${base}/reset-password.html?token=${token}`;
-        console.log(`Password reset requested for ${email}. Link: ${resetLink}`);
 
-        res.json({ message: 'Reset link generated', resetLink, token });
+        // Prepare email content
+        const mailOptions = {
+            from: process.env.SMTP_FROM || '"ShortR" <noreply@example.com>',
+            to: email,
+            subject: 'Réinitialisation de votre mot de passe - ShortR',
+            text: `Bonjour,\n\nVous avez demandé la réinitialisation de votre mot de passe pour votre compte ShortR.\n\nVeuillez cliquer sur le lien ci-dessous pour réinitialiser votre mot de passe (ce lien est valable pendant 1 heure) :\n\n${resetLink}\n\nSi vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email.\n\nL'équipe ShortR`,
+            html: `<p>Bonjour,</p><p>Vous avez demandé la réinitialisation de votre mot de passe pour votre compte ShortR.</p><p>Veuillez cliquer sur le lien ci-dessous pour réinitialiser votre mot de passe (ce lien est valable pendant 1 heure) :</p><p><a href="${resetLink}">${resetLink}</a></p><p>Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email.</p><p>L'équipe ShortR</p>`
+        };
+
+        let emailSent = false;
+        // Check if SMTP is configured (not empty or placeholder)
+        const isSmtpConfigured = process.env.SMTP_USER &&
+                                !process.env.SMTP_USER.includes('yourdomain') &&
+                                process.env.SMTP_HOST &&
+                                !process.env.SMTP_HOST.includes('yourdomain');
+
+        if (isSmtpConfigured) {
+            try {
+                await transporter.sendMail(mailOptions);
+                emailSent = true;
+                console.log(`Password reset email sent successfully to ${email}`);
+            } catch (mailError) {
+                console.error(`Failed to send password reset email via SMTP to ${email}:`, mailError);
+            }
+        }
+
+        // Fallback logging for local testing if SMTP failed or is not configured
+        if (!emailSent) {
+            console.log(`[DEVELOPMENT FALLBACK] Password reset requested for ${email}. Link: ${resetLink}`);
+        }
+
+        // Return a secure response (NO resetLink or token)
+        res.json({ message: 'If this email is registered, a reset link has been sent.' });
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: 'Server error' });
