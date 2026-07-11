@@ -212,7 +212,100 @@ app.post('/api/auth/forgot-password', async (req, res) => {
             to: email,
             subject: 'Réinitialisation de votre mot de passe - ShortR',
             text: `Bonjour,\n\nVous avez demandé la réinitialisation de votre mot de passe pour votre compte ShortR.\n\nVeuillez cliquer sur le lien ci-dessous pour réinitialiser votre mot de passe (ce lien est valable pendant 1 heure) :\n\n${resetLink}\n\nSi vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email.\n\nL'équipe ShortR`,
-            html: `<p>Bonjour,</p><p>Vous avez demandé la réinitialisation de votre mot de passe pour votre compte ShortR.</p><p>Veuillez cliquer sur le lien ci-dessous pour réinitialiser votre mot de passe (ce lien est valable pendant 1 heure) :</p><p><a href="${resetLink}">${resetLink}</a></p><p>Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email.</p><p>L'équipe ShortR</p>`
+            html: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            background-color: #0b1020;
+            color: #e6ebff;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .logo-img {
+            max-width: 180px;
+            height: auto;
+            margin-bottom: 30px;
+        }
+        .card {
+            background-color: #0e1533;
+            border: 1px solid #2b3355;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: left;
+        }
+        h1 {
+            color: #ffffff;
+            font-size: 22px;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        p {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #e6ebff;
+        }
+        .btn {
+            display: inline-block;
+            background-color: #3b82f6;
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 16px;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+        .btn:hover {
+            background-color: #2563eb;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 14px;
+            color: #888888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="cid:logo" alt="ShortR Logo" class="logo-img">
+        <div class="card">
+            <h1>Réinitialisation de votre mot de passe</h1>
+            <p>Bonjour,</p>
+            <p>Vous avez demandé la réinitialisation de votre mot de passe pour votre compte ShortR.</p>
+            <p>Veuillez cliquer sur le bouton ci-dessous pour réinitialiser votre mot de passe (ce lien est valable pendant 1 heure) :</p>
+            <div style="text-align: center;">
+                <a href="${resetLink}" class="btn">Réinitialiser mon mot de passe</a>
+            </div>
+            <p style="font-size: 14px; color: #888888; word-break: break-all;">
+                Si le bouton ne fonctionne pas, copiez-collez le lien suivant dans votre navigateur :<br>
+                <a href="${resetLink}" style="color: #3b82f6;">${resetLink}</a>
+            </p>
+            <p>Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email en toute sécurité.</p>
+        </div>
+        <div class="footer">
+            <p>© 2025 ShortR - Tous droits réservés.</p>
+        </div>
+    </div>
+</body>
+</html>`,
+            attachments: [{
+                filename: 'logo.png',
+                path: 'public/logo.png',
+                cid: 'logo'
+            }]
         };
 
         let emailSent = false;
