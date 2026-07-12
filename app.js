@@ -15,16 +15,6 @@ import xlsx from 'xlsx';
 
 dotenv.config();
 
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'localhost',
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: Number(process.env.SMTP_PORT) === 465, // true for 465, false for other ports
-    auth: {
-        user: process.env.SMTP_USER || '',
-        pass: process.env.SMTP_PASS || ''
-    }
-});
-
 const app = express();
 
 // Self-healing database migration
@@ -237,9 +227,44 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
         const resetLink = `${base}/reset-password.html?token=${token}`;
 
+        // Configure dynamic transport
+        let transporter;
+        let fromEmail = process.env.SMTP_FROM || '"ShortR" <noreply@example.com>';
+
+        const isSmtpConfigured = process.env.SMTP_USER &&
+                                !process.env.SMTP_USER.includes('yourdomain') &&
+                                process.env.SMTP_HOST &&
+                                !process.env.SMTP_HOST.includes('yourdomain');
+
+        if (isSmtpConfigured) {
+            transporter = nodemailer.createTransport({
+                host: process.env.SMTP_HOST,
+                port: Number(process.env.SMTP_PORT || 587),
+                secure: Number(process.env.SMTP_PORT) === 465,
+                auth: {
+                    user: process.env.SMTP_USER,
+                    pass: process.env.SMTP_PASS
+                }
+            });
+        } else {
+            // Local fallback SMTP (for o2switch out-of-the-box local mailing on port 25 without credentials)
+            transporter = nodemailer.createTransport({
+                host: 'localhost',
+                port: 25,
+                tls: {
+                    rejectUnauthorized: false
+                }
+            });
+
+            // Dynamically derive a valid sender email for o2switch using the request hostname
+            const host = req.get('host') || 'localhost';
+            const domain = host.split(':')[0];
+            fromEmail = `"ShortR" <noreply@${domain}>`;
+        }
+
         // Prepare email content
         const mailOptions = {
-            from: process.env.SMTP_FROM || '"ShortR" <noreply@example.com>',
+            from: fromEmail,
             to: email,
             subject: 'Réinitialisation de votre mot de passe - ShortR',
             text: `Bonjour,\n\nVous avez demandé la réinitialisation de votre mot de passe pour votre compte ShortR.\n\nVeuillez cliquer sur le lien ci-dessous pour réinitialiser votre mot de passe (ce lien est valable pendant 1 heure) :\n\n${resetLink}\n\nSi vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email.\n\nL'équipe ShortR`,
@@ -340,26 +365,17 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         };
 
         let emailSent = false;
-        // Check if SMTP is configured (not empty or placeholder)
-        const isSmtpConfigured = process.env.SMTP_USER &&
-                                !process.env.SMTP_USER.includes('yourdomain') &&
-                                process.env.SMTP_HOST &&
-                                !process.env.SMTP_HOST.includes('yourdomain');
 
-        if (isSmtpConfigured) {
-            try {
-                await transporter.sendMail(mailOptions);
-                emailSent = true;
-                console.log(`Password reset email sent successfully to ${email}`);
-            } catch (mailError) {
-                console.error(`Failed to send password reset email via SMTP to ${email}:`, mailError);
-            }
+        try {
+            await transporter.sendMail(mailOptions);
+            emailSent = true;
+            console.log(`Password reset email sent successfully to ${email}`);
+        } catch (mailError) {
+            console.error(`Failed to send password reset email to ${email}:`, mailError);
         }
 
-        // Fallback logging for local testing if SMTP failed or is not configured
-        if (!emailSent) {
-            console.log(`[DEVELOPMENT FALLBACK] Password reset requested for ${email}. Link: ${resetLink}`);
-        }
+        // Always fallback log for development verification
+        console.log(`[DEVELOPMENT FALLBACK] Password reset requested for ${email}. Link: ${resetLink}`);
 
         // Return a secure response (NO resetLink or token)
         res.json({ message: 'If this email is registered, a reset link has been sent.' });
