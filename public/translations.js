@@ -29,6 +29,18 @@ const translations = {
         "register.already_account": "Already have an account?",
         "register.login_link": "Login",
         "register.success": "Registration successful! You can now log in.",
+        "forgot.title": "Forgot Password - ShortR",
+        "forgot.heading": "Forgot Password",
+        "forgot.label.email": "Email",
+        "forgot.button.send": "Send Reset Link",
+        "forgot.back_to_login": "Back to Login",
+        "forgot.success_message": "If this email is registered, a reset link has been sent. Please check your inbox.",
+        "reset.title": "Reset Password - ShortR",
+        "reset.heading": "Reset Password",
+        "reset.label.password": "New Password (8 characters minimum)",
+        "reset.button.reset": "Reset Password",
+        "reset.success": "Password reset successfully! You can now log in.",
+        "login.forgot_link": "Forgot your password?",
     },
     fr: {
         "nav.dashboard": "Tableau de bord",
@@ -60,6 +72,18 @@ const translations = {
         "register.already_account": "Déjà un compte ?",
         "register.login_link": "Connectez-vous",
         "register.success": "Inscription réussie ! Vous pouvez maintenant vous connecter.",
+        "forgot.title": "Mot de passe oublié - ShortR",
+        "forgot.heading": "Mot de passe oublié",
+        "forgot.label.email": "Email",
+        "forgot.button.send": "Envoyer le lien de réinitialisation",
+        "forgot.back_to_login": "Retour à la connexion",
+        "forgot.success_message": "Si cette adresse email est enregistrée, un lien de réinitialisation a été envoyé. Veuillez vérifier votre boîte de réception.",
+        "reset.title": "Réinitialiser le mot de passe - ShortR",
+        "reset.heading": "Réinitialiser le mot de passe",
+        "reset.label.password": "Nouveau mot de passe (8 caractères minimum)",
+        "reset.button.reset": "Réinitialiser le mot de passe",
+        "reset.success": "Mot de passe réinitialisé avec succès ! Vous pouvez maintenant vous connecter.",
+        "login.forgot_link": "Mot de passe oublié ?",
     }
 };
 
@@ -68,13 +92,24 @@ function setLanguage(lang) {
     updateText();
 }
 
+function getDefaultLanguage() {
+    const saved = localStorage.getItem('language');
+    if (saved) return saved;
+    const navLang = navigator.language || navigator.userLanguage || 'fr';
+    const langCode = navLang.substring(0, 2).toLowerCase();
+    return (langCode === 'fr') ? 'fr' : 'en';
+}
+
 function getTranslation(key) {
-    const lang = localStorage.getItem('language') || 'fr';
+    const lang = getDefaultLanguage();
     return translations[lang][key] || key;
 }
 
+// Export helper for external use (e.g. nav.js)
+window.getDefaultLanguage = getDefaultLanguage;
+
 function updateText() {
-    const lang = localStorage.getItem('language') || 'fr';
+    const lang = getDefaultLanguage();
     const elements = document.querySelectorAll('[data-translate]');
     elements.forEach(el => {
         const key = el.getAttribute('data-translate');

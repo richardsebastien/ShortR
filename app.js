@@ -8,13 +8,55 @@ import { pool } from './db.js';
 import { isValidUrl, isValidCode } from './utils/validate.js';
 import session from 'express-session';
 import bcrypt from 'bcryptjs';
+import nodemailer from 'nodemailer';
 import fetch from 'node-fetch';
 import { Parser } from 'json2csv';
 import xlsx from 'xlsx';
 
 dotenv.config();
 
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'localhost',
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: Number(process.env.SMTP_PORT) === 465, // true for 465, false for other ports
+    auth: {
+        user: process.env.SMTP_USER || '',
+        pass: process.env.SMTP_PASS || ''
+    }
+});
+
 const app = express();
+
+// Self-healing database migration
+async function runMigrations() {
+    try {
+        // Check if users table exists
+        const [tables] = await pool.query("SHOW TABLES LIKE 'users'");
+        if (tables.length === 0) {
+            console.log("Database tables do not exist yet. Skipping column check.");
+            return;
+        }
+
+        // Check columns in users table
+        const [columns] = await pool.query("SHOW COLUMNS FROM users");
+        const columnNames = columns.map(c => c.Field);
+
+        if (!columnNames.includes('reset_token')) {
+            console.log("Migrating database: Adding reset_token column to users table...");
+            await pool.query("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255) NULL");
+        }
+        if (!columnNames.includes('reset_token_expires')) {
+            console.log("Migrating database: Adding reset_token_expires column to users table...");
+            await pool.query("ALTER TABLE users ADD COLUMN reset_token_expires DATETIME NULL");
+        }
+        console.log("Database migrations checked and up-to-date.");
+    } catch (err) {
+        console.error("Database migration check failed:", err);
+    }
+}
+
+// Run migrations on startup
+runMigrations();
 
 app.use(express.json());
 app.use(morgan('tiny'));
@@ -173,6 +215,177 @@ app.get('/api/auth/me', (req, res) => {
         res.json({ userId: req.session.userId });
     } else {
         res.status(401).json({ error: 'Not authenticated' });
+    }
+});
+
+// Forgot password / Request reset token
+app.post('/api/auth/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ error: 'Email is required' });
+        }
+        const [[user]] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        const token = nanoid(32);
+        // Expiration in 1 hour
+        const expires = new Date(Date.now() + 3600000);
+        await pool.query('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?', [token, expires, email]);
+
+        const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
+        const resetLink = `${base}/reset-password.html?token=${token}`;
+
+        // Prepare email content
+        const mailOptions = {
+            from: process.env.SMTP_FROM || '"ShortR" <noreply@example.com>',
+            to: email,
+            subject: 'Réinitialisation de votre mot de passe - ShortR',
+            text: `Bonjour,\n\nVous avez demandé la réinitialisation de votre mot de passe pour votre compte ShortR.\n\nVeuillez cliquer sur le lien ci-dessous pour réinitialiser votre mot de passe (ce lien est valable pendant 1 heure) :\n\n${resetLink}\n\nSi vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email.\n\nL'équipe ShortR`,
+            html: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            background-color: #0b1020;
+            color: #e6ebff;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .logo-img {
+            max-width: 180px;
+            height: auto;
+            margin-bottom: 30px;
+        }
+        .card {
+            background-color: #0e1533;
+            border: 1px solid #2b3355;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: left;
+        }
+        h1 {
+            color: #ffffff;
+            font-size: 22px;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        p {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #e6ebff;
+        }
+        .btn {
+            display: inline-block;
+            background-color: #3b82f6;
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 16px;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+        .btn:hover {
+            background-color: #2563eb;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 14px;
+            color: #888888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="cid:logo" alt="ShortR Logo" class="logo-img">
+        <div class="card">
+            <h1>Réinitialisation de votre mot de passe</h1>
+            <p>Bonjour,</p>
+            <p>Vous avez demandé la réinitialisation de votre mot de passe pour votre compte ShortR.</p>
+            <p>Veuillez cliquer sur le bouton ci-dessous pour réinitialiser votre mot de passe (ce lien est valable pendant 1 heure) :</p>
+            <div style="text-align: center;">
+                <a href="${resetLink}" class="btn">Réinitialiser mon mot de passe</a>
+            </div>
+            <p style="font-size: 14px; color: #888888; word-break: break-all;">
+                Si le bouton ne fonctionne pas, copiez-collez le lien suivant dans votre navigateur :<br>
+                <a href="${resetLink}" style="color: #3b82f6;">${resetLink}</a>
+            </p>
+            <p>Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email en toute sécurité.</p>
+        </div>
+        <div class="footer">
+            <p>© 2025 ShortR - Tous droits réservés.</p>
+        </div>
+    </div>
+</body>
+</html>`,
+            attachments: [{
+                filename: 'logo.png',
+                path: 'public/logo.png',
+                cid: 'logo'
+            }]
+        };
+
+        let emailSent = false;
+        // Check if SMTP is configured (not empty or placeholder)
+        const isSmtpConfigured = process.env.SMTP_USER &&
+                                !process.env.SMTP_USER.includes('yourdomain') &&
+                                process.env.SMTP_HOST &&
+                                !process.env.SMTP_HOST.includes('yourdomain');
+
+        if (isSmtpConfigured) {
+            try {
+                await transporter.sendMail(mailOptions);
+                emailSent = true;
+                console.log(`Password reset email sent successfully to ${email}`);
+            } catch (mailError) {
+                console.error(`Failed to send password reset email via SMTP to ${email}:`, mailError);
+            }
+        }
+
+        // Fallback logging for local testing if SMTP failed or is not configured
+        if (!emailSent) {
+            console.log(`[DEVELOPMENT FALLBACK] Password reset requested for ${email}. Link: ${resetLink}`);
+        }
+
+        // Return a secure response (NO resetLink or token)
+        res.json({ message: 'If this email is registered, a reset link has been sent.' });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Reset password using token
+app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+        const { token, password } = req.body;
+        if (!token || !password || password.length < 8) {
+            return res.status(400).json({ error: 'Token and password (min 8 chars) are required' });
+        }
+        const [[user]] = await pool.query('SELECT id FROM users WHERE reset_token = ? AND reset_token_expires > NOW()', [token]);
+        if (!user) {
+            return res.status(400).json({ error: 'Invalid or expired reset token' });
+        }
+        const passwordHash = await bcrypt.hash(password, 10);
+        await pool.query('UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?', [passwordHash, user.id]);
+        res.json({ message: 'Password reset successfully' });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Server error' });
     }
 });
 

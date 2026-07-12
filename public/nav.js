@@ -42,27 +42,51 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             <div class="nav__menu">
                 ${menuLinks}
-                <button id="theme-toggle" class="nav__link">Theme</button>
-                <button id="lang-toggle" class="nav__link">EN/FR</button>
+                <label class="theme-switch" title="Changer de thème">
+                    <input type="checkbox" id="theme-toggle">
+                    <span class="slider">
+                        <span class="slider-sun">☀️</span>
+                        <span class="slider-moon">🌙</span>
+                        <span class="slider-ball"></span>
+                    </span>
+                </label>
+                <select id="lang-select" class="nav__select" aria-label="Langue / Language">
+                    <option value="fr">🇫🇷 FR</option>
+                    <option value="en">🇬🇧 EN</option>
+                </select>
             </div>
         </nav>
     `;
 
-    // Add event listener for theme toggle
-    const themeToggleBtn = document.getElementById('theme-toggle');
-    if(themeToggleBtn) {
-        themeToggleBtn.addEventListener('click', () => {
-            toggleTheme();
+    // Sync theme toggle checkbox and add event listener
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+        const savedTheme = localStorage.getItem('theme') || 'dark-theme';
+        themeToggle.checked = (savedTheme === 'light-theme');
+        themeToggle.addEventListener('change', () => {
+            const newTheme = themeToggle.checked ? 'light-theme' : 'dark-theme';
+            if (typeof applyTheme === 'function') {
+                applyTheme(newTheme);
+            } else {
+                if (newTheme === 'light-theme') {
+                    document.documentElement.classList.add('light-theme');
+                } else {
+                    document.documentElement.classList.remove('light-theme');
+                }
+                localStorage.setItem('theme', newTheme);
+            }
         });
     }
 
-    // Add event listener for language toggle
-    const langToggleBtn = document.getElementById('lang-toggle');
-    if(langToggleBtn) {
-        langToggleBtn.addEventListener('click', () => {
-            const currentLang = localStorage.getItem('language') || 'fr';
-            const newLang = currentLang === 'fr' ? 'en' : 'fr';
-            setLanguage(newLang);
+    // Sync language select dropdown and add event listener
+    const langSelect = document.getElementById('lang-select');
+    if (langSelect) {
+        const savedLang = (typeof getDefaultLanguage === 'function')
+            ? getDefaultLanguage()
+            : (localStorage.getItem('language') || 'fr');
+        langSelect.value = savedLang;
+        langSelect.addEventListener('change', () => {
+            setLanguage(langSelect.value);
         });
     }
 
