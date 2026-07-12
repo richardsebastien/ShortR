@@ -27,6 +27,37 @@ const transporter = nodemailer.createTransport({
 
 const app = express();
 
+// Self-healing database migration
+async function runMigrations() {
+    try {
+        // Check if users table exists
+        const [tables] = await pool.query("SHOW TABLES LIKE 'users'");
+        if (tables.length === 0) {
+            console.log("Database tables do not exist yet. Skipping column check.");
+            return;
+        }
+
+        // Check columns in users table
+        const [columns] = await pool.query("SHOW COLUMNS FROM users");
+        const columnNames = columns.map(c => c.Field);
+
+        if (!columnNames.includes('reset_token')) {
+            console.log("Migrating database: Adding reset_token column to users table...");
+            await pool.query("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255) NULL");
+        }
+        if (!columnNames.includes('reset_token_expires')) {
+            console.log("Migrating database: Adding reset_token_expires column to users table...");
+            await pool.query("ALTER TABLE users ADD COLUMN reset_token_expires DATETIME NULL");
+        }
+        console.log("Database migrations checked and up-to-date.");
+    } catch (err) {
+        console.error("Database migration check failed:", err);
+    }
+}
+
+// Run migrations on startup
+runMigrations();
+
 app.use(express.json());
 app.use(morgan('tiny'));
 // If deployed behind a reverse proxy (like Apache/nginx on o2switch), enable trust proxy
