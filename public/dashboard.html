@@ -24,6 +24,7 @@
                 <th>Titre</th>
                 <th>Expiration</th>
                 <th>Clics Max</th>
+                <th>Protection</th>
                 <th>Créé le</th>
                 <th>Stats</th>
                 <th>Actions</th>
@@ -51,12 +52,14 @@
             row.dataset.code = link.code;
             const formattedExp = link.expires_at ? new Date(link.expires_at).toLocaleString() : '—';
             const formattedMaxClicks = link.max_clicks !== null ? link.max_clicks : '—';
+            const formattedProtection = link.is_protected ? '🔒 Oui' : '🔓 Non';
             row.innerHTML = `
                 <td><a class="link" href="/${link.code}" target="_blank">${link.code}</a></td>
                 <td>${link.target}</td>
                 <td>${link.title || ''}</td>
                 <td>${formattedExp}</td>
                 <td>${formattedMaxClicks}</td>
+                <td>${formattedProtection}</td>
                 <td>${new Date(link.created_at).toLocaleString()}</td>
                 <td><a class="link" href="/private-stats.html#${link.code}">Voir</a></td>
                 <td>
