@@ -25,6 +25,17 @@
 </div>
 </div>
 
+<div class="row" style="margin-top: 12px;">
+<div>
+<label data-translate="index.label.expires_at">Date d'expiration (optionnelle)</label>
+<input id="expiresAt" type="datetime-local" />
+</div>
+<div>
+<label data-translate="index.label.max_clicks">Nombre de clics max (optionnel)</label>
+<input id="maxClicks" type="number" min="1" placeholder="ex: 100" />
+</div>
+</div>
+
 
 <button style="margin-top: 16px;" data-translate="index.button.shorten">Raccourcir</button>
 </form>
@@ -45,7 +56,9 @@ e.preventDefault();
 const payload = {
 target: $('#target').value.trim(),
 customCode: $('#code').value.trim() || undefined,
-title: $('#title').value.trim() || undefined
+title: $('#title').value.trim() || undefined,
+expiresAt: $('#expiresAt').value || undefined,
+maxClicks: $('#maxClicks').value.trim() || undefined
 };
 const r = await fetch('/api/shorten', {
 method: 'POST', headers: { 'Content-Type': 'application/json' },
