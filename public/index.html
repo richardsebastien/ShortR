@@ -37,9 +37,13 @@
 </div>
 
 <div class="row" style="margin-top: 12px;">
-<div style="width: 100%;">
+<div>
 <label data-translate="index.label.password">Mot de passe (optionnel)</label>
 <input id="password" type="password" placeholder="••••••••" />
+</div>
+<div>
+<label data-translate="index.label.mobile_target">Cible mobile (optionnelle)</label>
+<input id="mobileTarget" type="url" placeholder="https://m.…" />
 </div>
 </div>
 
@@ -66,7 +70,8 @@ customCode: $('#code').value.trim() || undefined,
 title: $('#title').value.trim() || undefined,
 expiresAt: $('#expiresAt').value || undefined,
 maxClicks: $('#maxClicks').value.trim() || undefined,
-password: $('#password').value || undefined
+password: $('#password').value || undefined,
+mobileTarget: $('#mobileTarget').value.trim() || undefined
 };
 const r = await fetch('/api/shorten', {
 method: 'POST', headers: { 'Content-Type': 'application/json' },
