@@ -39,20 +39,6 @@ async function runMigrations() {
             console.log("Migrating database: Adding reset_token_expires column to users table...");
             await pool.query("ALTER TABLE users ADD COLUMN reset_token_expires DATETIME NULL");
         }
-
-        // Check columns in urls table
-        const [urlColumns] = await pool.query("SHOW COLUMNS FROM urls");
-        const urlColumnNames = urlColumns.map(c => c.Field);
-
-        if (!urlColumnNames.includes('expires_at')) {
-            console.log("Migrating database: Adding expires_at column to urls table...");
-            await pool.query("ALTER TABLE urls ADD COLUMN expires_at DATETIME NULL");
-        }
-        if (!urlColumnNames.includes('max_clicks')) {
-            console.log("Migrating database: Adding max_clicks column to urls table...");
-            await pool.query("ALTER TABLE urls ADD COLUMN max_clicks INT UNSIGNED NULL");
-        }
-
         console.log("Database migrations checked and up-to-date.");
     } catch (err) {
         console.error("Database migration check failed:", err);
@@ -423,30 +409,9 @@ app.post('/api/auth/reset-password', async (req, res) => {
 // Create a short URL
 app.post('/api/shorten', createLimiter, async (req, res) => {
 	try {
-		// Accept the frontend payload: { target, customCode, title, expiresAt, maxClicks }
-		const { target, customCode, title, expiresAt, maxClicks } = req.body || {};
+		// Accept the frontend payload: { target, customCode, title }
+		const { target, customCode, title } = req.body || {};
 		if (!target || !isValidUrl(target)) return res.status(400).json({ error: 'Invalid url' });
-
-		let finalExpiresAt = null;
-		if (expiresAt) {
-			const date = new Date(expiresAt);
-			if (isNaN(date.getTime())) {
-				return res.status(400).json({ error: 'Invalid expiration date' });
-			}
-			if (date <= new Date()) {
-				return res.status(400).json({ error: 'Expiration date must be in the future' });
-			}
-			finalExpiresAt = date;
-		}
-
-		let finalMaxClicks = null;
-		if (maxClicks !== undefined && maxClicks !== null && maxClicks !== '') {
-			const parsedClicks = Number(maxClicks);
-			if (!Number.isInteger(parsedClicks) || parsedClicks <= 0) {
-				return res.status(400).json({ error: 'Max clicks must be a positive integer' });
-			}
-			finalMaxClicks = parsedClicks;
-		}
 
 		let finalCode = customCode && isValidCode(customCode) ? customCode : nanoid(7);
 
@@ -458,14 +423,12 @@ app.post('/api/shorten', createLimiter, async (req, res) => {
 			finalCode = nanoid(8);
 		}
 
-		await pool.query('INSERT INTO urls (code, target, title, is_active, created_ip, user_id, expires_at, max_clicks) VALUES (?, ?, ?, 1, ?, ?, ?, ?)', [
+		await pool.query('INSERT INTO urls (code, target, title, is_active, created_ip, user_id) VALUES (?, ?, ?, 1, ?, ?)', [
 			finalCode,
 			target,
 			title || null,
 			getClientIp(req),
-            req.session.userId || null,
-			finalExpiresAt,
-			finalMaxClicks
+            req.session.userId || null
 		]);
 
 		const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
@@ -513,7 +476,7 @@ app.get('/api/user/links', async (req, res) => {
         return res.status(401).json({ error: 'Not authenticated' });
     }
     try {
-        const [links] = await pool.query('SELECT code, target, title, created_at, expires_at, max_clicks FROM urls WHERE user_id = ? ORDER BY id DESC', [req.session.userId]);
+        const [links] = await pool.query('SELECT code, target, title, created_at FROM urls WHERE user_id = ? ORDER BY id DESC', [req.session.userId]);
         res.json(links);
     } catch (e) {
         console.error(e);
@@ -530,102 +493,8 @@ app.get('/:code', async (req, res) => {
 		const { code } = req.params;
 		if (!isValidCode(code)) return res.status(404).send('Not found');
 
-		const [[url]] = await pool.query('SELECT id, target, is_active, expires_at, max_clicks FROM urls WHERE code = ?', [code]);
+		const [[url]] = await pool.query('SELECT id, target, is_active FROM urls WHERE code = ?', [code]);
 		if (!url || !url.is_active) return res.status(404).send('Not found');
-
-		let expired = false;
-		if (url.expires_at && new Date(url.expires_at) < new Date()) {
-			expired = true;
-		}
-
-		if (!expired && url.max_clicks !== null) {
-			const [[{ clickCount }]] = await pool.query('SELECT COUNT(*) AS clickCount FROM clicks WHERE url_id = ?', [url.id]);
-			if (clickCount >= url.max_clicks) {
-				expired = true;
-			}
-		}
-
-		if (expired) {
-			const acceptLang = req.headers['accept-language'] || '';
-			const isFrench = acceptLang.toLowerCase().includes('fr');
-			res.status(410); // Gone status code is perfect for expired links
-			return res.send(`<!DOCTYPE html>
-<html lang="${isFrench ? 'fr' : 'en'}">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${isFrench ? 'Lien expiré - ShortR' : 'Link expired - ShortR'}</title>
-    <style>
-        body {
-            background-color: #0b1020;
-            color: #e6ebff;
-            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-        }
-        .container {
-            max-width: 500px;
-            width: 90%;
-            text-align: center;
-            padding: 40px 20px;
-            background-color: #0e1533;
-            border: 1px solid #2b3355;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        }
-        .logo-img {
-            max-width: 150px;
-            height: auto;
-            margin-bottom: 24px;
-        }
-        h1 {
-            color: #ffffff;
-            font-size: 24px;
-            font-weight: 700;
-            margin-top: 0;
-            margin-bottom: 16px;
-        }
-        p {
-            font-size: 16px;
-            line-height: 1.6;
-            margin-top: 0;
-            margin-bottom: 24px;
-            color: #a5b4fc;
-        }
-        .btn {
-            display: inline-block;
-            background-color: #3b82f6;
-            color: #ffffff !important;
-            text-decoration: none;
-            padding: 12px 24px;
-            border-radius: 10px;
-            font-weight: bold;
-            font-size: 16px;
-            transition: background-color 0.2s;
-        }
-        .btn:hover {
-            background-color: #2563eb;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <img src="/logo.png" alt="ShortR Logo" class="logo-img">
-        <h1>${isFrench ? 'Ce lien a expiré' : 'This link has expired'}</h1>
-        <p>
-            ${isFrench
-                ? "Désolé, ce lien de redirection n'est plus disponible car il a atteint sa date de validité ou sa limite maximale de clics."
-                : "Sorry, this redirection link is no longer available because it has reached its expiration date or maximum click limit."}
-        </p>
-        <a href="/" class="btn">${isFrench ? 'Créer mon propre lien' : 'Create my own link'}</a>
-    </div>
-</body>
-</html>`);
-		}
 
 		const ip = getClientIp(req);
 		const ua = req.headers['user-agent'] || null;
