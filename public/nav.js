@@ -111,6 +111,59 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
     document.body.appendChild(footer);
 
+    // Cookie Consent Banner
+    if (!localStorage.getItem('cookieConsent')) {
+        const cookieBanner = document.createElement('div');
+        cookieBanner.id = 'cookie-consent-banner';
+        cookieBanner.style.position = 'fixed';
+        cookieBanner.style.bottom = '20px';
+        cookieBanner.style.left = '50%';
+        cookieBanner.style.transform = 'translateX(-50%)';
+        cookieBanner.style.width = '90%';
+        cookieBanner.style.maxWidth = '550px';
+        cookieBanner.style.backgroundColor = 'var(--input-bg-color, #0e1533)';
+        cookieBanner.style.border = '1px solid var(--input-border-color, #2b3355)';
+        cookieBanner.style.borderRadius = '12px';
+        cookieBanner.style.padding = '16px 20px';
+        cookieBanner.style.boxShadow = '0 10px 25px rgba(0,0,0,0.4)';
+        cookieBanner.style.zIndex = '99999';
+        cookieBanner.style.display = 'flex';
+        cookieBanner.style.flexDirection = 'row';
+        cookieBanner.style.alignItems = 'center';
+        cookieBanner.style.justifyContent = 'space-between';
+        cookieBanner.style.gap = '16px';
+        cookieBanner.style.boxSizing = 'border-box';
+
+        const mediaQuery = window.matchMedia('(max-width: 639px)');
+        const handleMobile = (e) => {
+            if (e.matches) {
+                cookieBanner.style.flexDirection = 'column';
+                cookieBanner.style.textAlign = 'center';
+            } else {
+                cookieBanner.style.flexDirection = 'row';
+                cookieBanner.style.textAlign = 'left';
+            }
+        };
+        mediaQuery.addEventListener('change', handleMobile);
+        handleMobile(mediaQuery);
+
+        cookieBanner.innerHTML = `
+            <p style="margin: 0; font-size: 14px; line-height: 1.4; color: var(--text-color, #e6ebff);" data-translate="cookie.banner.text">
+                Nous utilisons des cookies pour améliorer votre expérience...
+            </p>
+            <button id="cookie-accept-btn" style="padding: 8px 16px; font-size: 14px; white-space: nowrap; flex-shrink: 0;" data-translate="cookie.banner.accept">
+                Accepter
+            </button>
+        `;
+
+        document.body.appendChild(cookieBanner);
+
+        document.getElementById('cookie-accept-btn').addEventListener('click', () => {
+            localStorage.setItem('cookieConsent', 'accepted');
+            cookieBanner.remove();
+        });
+    }
+
     // Initial text update after DOM is built
     updateText();
 });

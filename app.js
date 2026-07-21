@@ -52,6 +52,10 @@ async function runMigrations() {
             console.log("Migrating database: Adding max_clicks column to urls table...");
             await pool.query("ALTER TABLE urls ADD COLUMN max_clicks INT UNSIGNED NULL");
         }
+        if (!urlColumnNames.includes('password_hash')) {
+            console.log("Migrating database: Adding password_hash column to urls table...");
+            await pool.query("ALTER TABLE urls ADD COLUMN password_hash VARCHAR(255) NULL");
+        }
 
         console.log("Database migrations checked and up-to-date.");
     } catch (err) {
@@ -420,11 +424,41 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 
+app.post('/api/unlock/:code', async (req, res) => {
+    try {
+        const { code } = req.params;
+        const { password } = req.body;
+
+        if (!isValidCode(code)) return res.status(404).json({ error: 'Not found' });
+        if (!password) return res.status(400).json({ error: 'Password is required' });
+
+        const [[url]] = await pool.query('SELECT password_hash FROM urls WHERE code = ? AND is_active = 1', [code]);
+        if (!url || !url.password_hash) {
+            return res.status(404).json({ error: 'Link not found or not protected' });
+        }
+
+        const matches = await bcrypt.compare(password, url.password_hash);
+        if (!matches) {
+            return res.status(401).json({ error: 'Incorrect password' });
+        }
+
+        if (!req.session.unlockedLinks) {
+            req.session.unlockedLinks = {};
+        }
+        req.session.unlockedLinks[code] = true;
+
+        res.json({ success: true, message: 'Link unlocked' });
+    } catch (e) {
+        console.error('Error unlocking link:', e);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 // Create a short URL
 app.post('/api/shorten', createLimiter, async (req, res) => {
 	try {
-		// Accept the frontend payload: { target, customCode, title, expiresAt, maxClicks }
-		const { target, customCode, title, expiresAt, maxClicks } = req.body || {};
+		// Accept the frontend payload: { target, customCode, title, expiresAt, maxClicks, password }
+		const { target, customCode, title, expiresAt, maxClicks, password } = req.body || {};
 		if (!target || !isValidUrl(target)) return res.status(400).json({ error: 'Invalid url' });
 
 		let finalExpiresAt = null;
@@ -448,6 +482,14 @@ app.post('/api/shorten', createLimiter, async (req, res) => {
 			finalMaxClicks = parsedClicks;
 		}
 
+		let finalPasswordHash = null;
+		if (password !== undefined && password !== null && password !== '') {
+			if (typeof password !== 'string' || password.length < 4) {
+				return res.status(400).json({ error: 'Password must be at least 4 characters long' });
+			}
+			finalPasswordHash = await bcrypt.hash(password, 10);
+		}
+
 		let finalCode = customCode && isValidCode(customCode) ? customCode : nanoid(7);
 
 		// Ensure unique code
@@ -458,14 +500,15 @@ app.post('/api/shorten', createLimiter, async (req, res) => {
 			finalCode = nanoid(8);
 		}
 
-		await pool.query('INSERT INTO urls (code, target, title, is_active, created_ip, user_id, expires_at, max_clicks) VALUES (?, ?, ?, 1, ?, ?, ?, ?)', [
+		await pool.query('INSERT INTO urls (code, target, title, is_active, created_ip, user_id, expires_at, max_clicks, password_hash) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)', [
 			finalCode,
 			target,
 			title || null,
 			getClientIp(req),
             req.session.userId || null,
 			finalExpiresAt,
-			finalMaxClicks
+			finalMaxClicks,
+			finalPasswordHash
 		]);
 
 		const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
@@ -513,7 +556,7 @@ app.get('/api/user/links', async (req, res) => {
         return res.status(401).json({ error: 'Not authenticated' });
     }
     try {
-        const [links] = await pool.query('SELECT code, target, title, created_at, expires_at, max_clicks FROM urls WHERE user_id = ? ORDER BY id DESC', [req.session.userId]);
+        const [links] = await pool.query('SELECT code, target, title, created_at, expires_at, max_clicks, (password_hash IS NOT NULL) AS is_protected FROM urls WHERE user_id = ? ORDER BY id DESC', [req.session.userId]);
         res.json(links);
     } catch (e) {
         console.error(e);
@@ -530,7 +573,7 @@ app.get('/:code', async (req, res) => {
 		const { code } = req.params;
 		if (!isValidCode(code)) return res.status(404).send('Not found');
 
-		const [[url]] = await pool.query('SELECT id, target, is_active, expires_at, max_clicks FROM urls WHERE code = ?', [code]);
+		const [[url]] = await pool.query('SELECT id, target, is_active, expires_at, max_clicks, password_hash FROM urls WHERE code = ?', [code]);
 		if (!url || !url.is_active) return res.status(404).send('Not found');
 
 		let expired = false;
@@ -625,6 +668,159 @@ app.get('/:code', async (req, res) => {
     </div>
 </body>
 </html>`);
+		}
+
+		// Check password protection
+		if (url.password_hash) {
+			if (!req.session.unlockedLinks || !req.session.unlockedLinks[code]) {
+				const acceptLang = req.headers['accept-language'] || '';
+				const isFrench = acceptLang.toLowerCase().includes('fr');
+				return res.send(`<!DOCTYPE html>
+<html lang="${isFrench ? 'fr' : 'en'}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${isFrench ? 'Lien Protégé - ShortR' : 'Protected Link - ShortR'}</title>
+    <style>
+        body {
+            background-color: #0b1020;
+            color: #e6ebff;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 450px;
+            width: 90%;
+            text-align: center;
+            padding: 40px 30px;
+            background-color: #0e1533;
+            border: 1px solid #2b3355;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        .logo-img {
+            max-width: 150px;
+            height: auto;
+            margin-bottom: 24px;
+        }
+        h1 {
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 12px;
+        }
+        p {
+            font-size: 15px;
+            line-height: 1.5;
+            margin-top: 0;
+            margin-bottom: 24px;
+            color: #a5b4fc;
+        }
+        .form-group {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #e6ebff;
+            opacity: 0.9;
+        }
+        input[type="password"] {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid #2b3355;
+            background: #0b1020;
+            color: #e6ebff;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        input[type="password"]:focus {
+            border-color: #3b82f6;
+            outline: none;
+        }
+        .btn {
+            width: 100%;
+            padding: 12px 16px;
+            border: 0;
+            border-radius: 10px;
+            background: #3b82f6;
+            color: #ffffff !important;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            box-sizing: border-box;
+        }
+        .btn:hover {
+            background-color: #2563eb;
+        }
+        .error-msg {
+            color: #f87171;
+            font-size: 14px;
+            margin-top: 12px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="/logo.png" alt="ShortR Logo" class="logo-img">
+        <h1>${isFrench ? 'Lien protégé' : 'Protected link'}</h1>
+        <p>
+            ${isFrench
+                ? "Ce lien est sécurisé par un mot de passe. Veuillez le saisir pour continuer."
+                : "This link is secured by a password. Please enter it to continue."}
+        </p>
+        <form id="unlock-form">
+            <div class="form-group">
+                <label for="password">${isFrench ? 'Mot de passe' : 'Password'}</label>
+                <input type="password" id="password" required placeholder="••••••••">
+            </div>
+            <button type="submit" class="btn">${isFrench ? 'Déverrouiller' : 'Unlock'}</button>
+            <div id="error" class="error-msg"></div>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('unlock-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('error');
+            errorDiv.style.display = 'none';
+
+            try {
+                const r = await fetch('/api/unlock/${code}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+                const data = await r.json();
+                if (r.ok) {
+                    window.location.reload();
+                } else {
+                    errorDiv.textContent = data.error || '${isFrench ? "Erreur" : "Error"}';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (err) {
+                errorDiv.textContent = '${isFrench ? "Erreur de connexion" : "Connection error"}';
+                errorDiv.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>`);
+			}
 		}
 
 		const ip = getClientIp(req);

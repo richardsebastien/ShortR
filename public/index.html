@@ -36,6 +36,13 @@
 </div>
 </div>
 
+<div class="row" style="margin-top: 12px;">
+<div style="width: 100%;">
+<label data-translate="index.label.password">Mot de passe (optionnel)</label>
+<input id="password" type="password" placeholder="••••••••" />
+</div>
+</div>
+
 
 <button style="margin-top: 16px;" data-translate="index.button.shorten">Raccourcir</button>
 </form>
@@ -58,7 +65,8 @@ target: $('#target').value.trim(),
 customCode: $('#code').value.trim() || undefined,
 title: $('#title').value.trim() || undefined,
 expiresAt: $('#expiresAt').value || undefined,
-maxClicks: $('#maxClicks').value.trim() || undefined
+maxClicks: $('#maxClicks').value.trim() || undefined,
+password: $('#password').value || undefined
 };
 const r = await fetch('/api/shorten', {
 method: 'POST', headers: { 'Content-Type': 'application/json' },
