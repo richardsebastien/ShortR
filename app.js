@@ -56,6 +56,10 @@ async function runMigrations() {
             console.log("Migrating database: Adding password_hash column to urls table...");
             await pool.query("ALTER TABLE urls ADD COLUMN password_hash VARCHAR(255) NULL");
         }
+        if (!urlColumnNames.includes('mobile_target')) {
+            console.log("Migrating database: Adding mobile_target column to urls table...");
+            await pool.query("ALTER TABLE urls ADD COLUMN mobile_target TEXT NULL");
+        }
 
         console.log("Database migrations checked and up-to-date.");
     } catch (err) {
@@ -457,8 +461,8 @@ app.post('/api/unlock/:code', async (req, res) => {
 // Create a short URL
 app.post('/api/shorten', createLimiter, async (req, res) => {
 	try {
-		// Accept the frontend payload: { target, customCode, title, expiresAt, maxClicks, password }
-		const { target, customCode, title, expiresAt, maxClicks, password } = req.body || {};
+		// Accept the frontend payload: { target, customCode, title, expiresAt, maxClicks, password, mobileTarget }
+		const { target, customCode, title, expiresAt, maxClicks, password, mobileTarget } = req.body || {};
 		if (!target || !isValidUrl(target)) return res.status(400).json({ error: 'Invalid url' });
 
 		let finalExpiresAt = null;
@@ -490,6 +494,14 @@ app.post('/api/shorten', createLimiter, async (req, res) => {
 			finalPasswordHash = await bcrypt.hash(password, 10);
 		}
 
+		let finalMobileTarget = null;
+		if (mobileTarget !== undefined && mobileTarget !== null && mobileTarget !== '') {
+			if (!isValidUrl(mobileTarget)) {
+				return res.status(400).json({ error: 'Invalid mobile target URL' });
+			}
+			finalMobileTarget = mobileTarget;
+		}
+
 		let finalCode = customCode && isValidCode(customCode) ? customCode : nanoid(7);
 
 		// Ensure unique code
@@ -500,7 +512,7 @@ app.post('/api/shorten', createLimiter, async (req, res) => {
 			finalCode = nanoid(8);
 		}
 
-		await pool.query('INSERT INTO urls (code, target, title, is_active, created_ip, user_id, expires_at, max_clicks, password_hash) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)', [
+		await pool.query('INSERT INTO urls (code, target, title, is_active, created_ip, user_id, expires_at, max_clicks, password_hash, mobile_target) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)', [
 			finalCode,
 			target,
 			title || null,
@@ -508,7 +520,8 @@ app.post('/api/shorten', createLimiter, async (req, res) => {
             req.session.userId || null,
 			finalExpiresAt,
 			finalMaxClicks,
-			finalPasswordHash
+			finalPasswordHash,
+			finalMobileTarget
 		]);
 
 		const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
@@ -556,7 +569,7 @@ app.get('/api/user/links', async (req, res) => {
         return res.status(401).json({ error: 'Not authenticated' });
     }
     try {
-        const [links] = await pool.query('SELECT code, target, title, created_at, expires_at, max_clicks, (password_hash IS NOT NULL) AS is_protected FROM urls WHERE user_id = ? ORDER BY id DESC', [req.session.userId]);
+        const [links] = await pool.query('SELECT code, target, title, created_at, expires_at, max_clicks, (password_hash IS NOT NULL) AS is_protected, mobile_target FROM urls WHERE user_id = ? ORDER BY id DESC', [req.session.userId]);
         res.json(links);
     } catch (e) {
         console.error(e);
@@ -573,7 +586,7 @@ app.get('/:code', async (req, res) => {
 		const { code } = req.params;
 		if (!isValidCode(code)) return res.status(404).send('Not found');
 
-		const [[url]] = await pool.query('SELECT id, target, is_active, expires_at, max_clicks, password_hash FROM urls WHERE code = ?', [code]);
+		const [[url]] = await pool.query('SELECT id, target, is_active, expires_at, max_clicks, password_hash, mobile_target FROM urls WHERE code = ?', [code]);
 		if (!url || !url.is_active) return res.status(404).send('Not found');
 
 		let expired = false;
@@ -858,7 +871,15 @@ app.get('/:code', async (req, res) => {
 			}
 		})();
 
-		return res.redirect(302, url.target);
+		let targetUrl = url.target;
+		if (url.mobile_target) {
+			const isMobile = /mobile|android|iphone|ipad|ipod|phone/i.test(ua || '');
+			if (isMobile) {
+				targetUrl = url.mobile_target;
+			}
+		}
+
+		return res.redirect(302, targetUrl);
 	} catch (e) {
 		console.error(e);
 		return res.status(500).send('Server error');
