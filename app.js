@@ -840,6 +840,162 @@ app.get('/:code', async (req, res) => {
 		const ua = req.headers['user-agent'] || null;
 		const ref = req.get('referer') || null;
 
+		let targetUrl = url.target;
+		if (url.mobile_target) {
+			const isMobile = /mobile|android|iphone|ipad|ipod|phone/i.test(ua || '');
+			if (isMobile) {
+				targetUrl = url.mobile_target;
+			}
+		}
+
+		if (req.query.preview !== 'skip') {
+			const acceptLang = req.headers['accept-language'] || '';
+			const isFrench = acceptLang.toLowerCase().includes('fr');
+			return res.send(`<!DOCTYPE html>
+<html lang="${isFrench ? 'fr' : 'en'}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${isFrench ? 'Avertissement de sécurité - ShortR' : 'Security Warning - ShortR'}</title>
+    <style>
+        body {
+            background-color: #0b1020;
+            color: #e6ebff;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            padding: 40px 30px;
+            background-color: #0e1533;
+            border: 1px solid #2b3355;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            box-sizing: border-box;
+        }
+        .logo-img {
+            max-width: 150px;
+            height: auto;
+            margin-bottom: 24px;
+        }
+        .warning-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        h1 {
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 12px;
+        }
+        p {
+            font-size: 15px;
+            line-height: 1.5;
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #a5b4fc;
+        }
+        .url-box {
+            background-color: #0b1020;
+            border: 1px solid #2b3355;
+            border-radius: 10px;
+            padding: 14px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 14px;
+            color: #60a5fa;
+            margin-bottom: 24px;
+            text-align: left;
+        }
+        .btn {
+            width: 100%;
+            padding: 12px 16px;
+            border: 0;
+            border-radius: 10px;
+            background: #3b82f6;
+            color: #ffffff !important;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            box-sizing: border-box;
+        }
+        .btn:hover {
+            background-color: #2563eb;
+        }
+        .btn:disabled {
+            background-color: #1d2440;
+            color: #64748b !important;
+            cursor: not-allowed;
+        }
+        .skip-link {
+            display: inline-block;
+            margin-top: 16px;
+            color: #888888;
+            font-size: 13px;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .skip-link:hover {
+            color: #ffffff;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="/logo.png" alt="ShortR Logo" class="logo-img">
+        <div class="warning-icon">⚠️</div>
+        <h1>${isFrench ? 'Avertissement de redirection' : 'Redirection Warning'}</h1>
+        <p>
+            ${isFrench
+                ? "Vous quittez ShortR pour vous rendre sur le site externe suivant. Assurez-vous d'avoir confiance en cette URL avant de continuer :"
+                : "You are leaving ShortR to go to the following external site. Make sure you trust this URL before proceeding:"}
+        </p>
+        <div class="url-box">${targetUrl}</div>
+
+        <button id="continue-btn" class="btn" disabled>
+            ${isFrench ? 'Continuer dans 5s' : 'Continue in 5s'}
+        </button>
+
+        <a href="/${code}?preview=skip" class="skip-link">
+            ${isFrench ? 'Passer le compte à rebours et continuer immédiatement' : 'Skip countdown and continue immediately'}
+        </a>
+    </div>
+
+    <script>
+        let timeLeft = 5;
+        const btn = document.getElementById('continue-btn');
+        const isFr = ${isFrench};
+
+        const interval = setInterval(() => {
+            timeLeft--;
+            if (timeLeft <= 0) {
+                clearInterval(interval);
+                btn.removeAttribute('disabled');
+                btn.textContent = isFr ? 'Continuer' : 'Continue';
+                btn.addEventListener('click', () => {
+                    window.location.href = '/${code}?preview=skip';
+                });
+            } else {
+                btn.textContent = isFr ? 'Continuer dans ' + timeLeft + 's' : 'Continue in ' + timeLeft + 's';
+            }
+        }, 1000);
+    </script>
+</body>
+</html>`);
+		}
+
 		// UTM depuis la requête actuelle (si présents)
 		const u = new URL(req.protocol + '://' + req.get('host') + req.originalUrl);
 		const utm_source = u.searchParams.get('utm_source');
@@ -870,14 +1026,6 @@ app.get('/:code', async (req, res) => {
 				console.error('Failed to log click', e)
 			}
 		})();
-
-		let targetUrl = url.target;
-		if (url.mobile_target) {
-			const isMobile = /mobile|android|iphone|ipad|ipod|phone/i.test(ua || '');
-			if (isMobile) {
-				targetUrl = url.mobile_target;
-			}
-		}
 
 		return res.redirect(302, targetUrl);
 	} catch (e) {
