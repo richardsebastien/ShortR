@@ -12,8 +12,33 @@ import nodemailer from 'nodemailer';
 import fetch from 'node-fetch';
 import { Parser } from 'json2csv';
 import xlsx from 'xlsx';
+import crypto from 'crypto';
 
 dotenv.config();
+
+function createUnlockToken(code) {
+    const expires = Date.now() + 30000; // 30 seconds
+    const data = `${code}:${expires}`;
+    const signature = crypto.createHmac('sha256', process.env.SESSION_SECRET)
+                            .update(data)
+                            .digest('hex');
+    return `${expires}:${signature}`;
+}
+
+function verifyUnlockToken(code, token) {
+    if (!token) return false;
+    const parts = token.split(':');
+    if (parts.length !== 2) return false;
+    const [expiresStr, signature] = parts;
+    const expires = parseInt(expiresStr, 10);
+    if (isNaN(expires) || expires < Date.now()) return false;
+
+    const data = `${code}:${expires}`;
+    const expectedSignature = crypto.createHmac('sha256', process.env.SESSION_SECRET)
+                                    .update(data)
+                                    .digest('hex');
+    return signature === expectedSignature;
+}
 
 const app = express();
 
@@ -446,6 +471,11 @@ app.post('/api/unlock/:code', async (req, res) => {
             return res.status(401).json({ error: 'Incorrect password' });
         }
 
+        if (req.body.refusedCookies) {
+            const token = createUnlockToken(code);
+            return res.json({ success: true, message: 'Link unlocked (stateless)', token });
+        }
+
         if (!req.session.unlockedLinks) {
             req.session.unlockedLinks = {};
         }
@@ -685,7 +715,8 @@ app.get('/:code', async (req, res) => {
 
 		// Check password protection
 		if (url.password_hash) {
-			if (!req.session.unlockedLinks || !req.session.unlockedLinks[code]) {
+			const hasToken = req.query.token && verifyUnlockToken(code, req.query.token);
+			if (!hasToken && (!req.session.unlockedLinks || !req.session.unlockedLinks[code])) {
 				const acceptLang = req.headers['accept-language'] || '';
 				const isFrench = acceptLang.toLowerCase().includes('fr');
 				return res.send(`<!DOCTYPE html>
@@ -812,15 +843,21 @@ app.get('/:code', async (req, res) => {
             const errorDiv = document.getElementById('error');
             errorDiv.style.display = 'none';
 
+            const refusedCookies = localStorage.getItem('cookieConsent') === 'refused';
+
             try {
                 const r = await fetch('/api/unlock/${code}', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password })
+                    body: JSON.stringify({ password, refusedCookies })
                 });
                 const data = await r.json();
                 if (r.ok) {
-                    window.location.reload();
+                    if (data.token) {
+                        window.location.href = '/${code}?token=' + data.token;
+                    } else {
+                        window.location.reload();
+                    }
                 } else {
                     errorDiv.textContent = data.error || '${isFrench ? "Erreur" : "Error"}';
                     errorDiv.style.display = 'block';
@@ -968,7 +1005,7 @@ app.get('/:code', async (req, res) => {
             ${isFrench ? 'Continuer dans 5s' : 'Continue in 5s'}
         </button>
 
-        <a href="/${code}?preview=skip" class="skip-link">
+        <a href="/${code}?preview=skip${req.query.token ? '&token=' + req.query.token : ''}" class="skip-link">
             ${isFrench ? 'Passer le compte à rebours et continuer immédiatement' : 'Skip countdown and continue immediately'}
         </a>
     </div>
@@ -985,7 +1022,7 @@ app.get('/:code', async (req, res) => {
                 btn.removeAttribute('disabled');
                 btn.textContent = isFr ? 'Continuer' : 'Continue';
                 btn.addEventListener('click', () => {
-                    window.location.href = '/${code}?preview=skip';
+                    window.location.href = '/${code}?preview=skip${req.query.token ? '&token=' + req.query.token : ''}';
                 });
             } else {
                 btn.textContent = isFr ? 'Continuer dans ' + timeLeft + 's' : 'Continue in ' + timeLeft + 's';

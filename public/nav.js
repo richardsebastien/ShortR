@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Sync theme toggle checkbox and add event listener
     const themeToggle = document.getElementById('theme-toggle');
     if (themeToggle) {
-        const savedTheme = localStorage.getItem('theme') || 'dark-theme';
+        const savedTheme = (localStorage.getItem('cookieConsent') === 'accepted' && localStorage.getItem('theme')) || 'dark-theme';
         themeToggle.checked = (savedTheme === 'light-theme');
         themeToggle.addEventListener('change', () => {
             const newTheme = themeToggle.checked ? 'light-theme' : 'dark-theme';
@@ -73,7 +73,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } else {
                     document.documentElement.classList.remove('light-theme');
                 }
-                localStorage.setItem('theme', newTheme);
+                if (localStorage.getItem('cookieConsent') === 'accepted') {
+                    localStorage.setItem('theme', newTheme);
+                }
             }
         });
     }
@@ -83,7 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (langSelect) {
         const savedLang = (typeof getDefaultLanguage === 'function')
             ? getDefaultLanguage()
-            : (localStorage.getItem('language') || 'fr');
+            : ((localStorage.getItem('cookieConsent') === 'accepted' && localStorage.getItem('language')) || 'fr');
         langSelect.value = savedLang;
         langSelect.addEventListener('change', () => {
             setLanguage(langSelect.value);
@@ -151,15 +153,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             <p style="margin: 0; font-size: 14px; line-height: 1.4; color: var(--text-color, #e6ebff);" data-translate="cookie.banner.text">
                 Nous utilisons des cookies pour améliorer votre expérience...
             </p>
-            <button id="cookie-accept-btn" style="padding: 8px 16px; font-size: 14px; white-space: nowrap; flex-shrink: 0;" data-translate="cookie.banner.accept">
-                Accepter
-            </button>
+            <div style="display: flex; gap: 8px; flex-wrap: nowrap;">
+                <button id="cookie-refuse-btn" style="padding: 8px 16px; font-size: 14px; white-space: nowrap; flex-shrink: 0; background-color: transparent; border: 1px solid var(--input-border-color, #2b3355); color: var(--text-color, #e6ebff); border-radius: 6px; cursor: pointer;" data-translate="cookie.banner.refuse">
+                    Refuser
+                </button>
+                <button id="cookie-accept-btn" style="padding: 8px 16px; font-size: 14px; white-space: nowrap; flex-shrink: 0; background-color: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer;" data-translate="cookie.banner.accept">
+                    Accepter
+                </button>
+            </div>
         `;
 
         document.body.appendChild(cookieBanner);
 
         document.getElementById('cookie-accept-btn').addEventListener('click', () => {
             localStorage.setItem('cookieConsent', 'accepted');
+            cookieBanner.remove();
+        });
+
+        document.getElementById('cookie-refuse-btn').addEventListener('click', () => {
+            localStorage.setItem('cookieConsent', 'refused');
+            localStorage.removeItem('theme');
+            localStorage.removeItem('language');
             cookieBanner.remove();
         });
     }
