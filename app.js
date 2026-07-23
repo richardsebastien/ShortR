@@ -353,9 +353,7 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
         const expires = new Date(Date.now() + 3600000);
         await pool.query('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?', [token, expires, email]);
 
-        const rawHost = req.get('host');
-        const isValidHost = rawHost && /^[a-zA-Z0-9.-]+(?::\d+)?$/.test(rawHost);
-        const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || (isValidHost ? `${req.protocol}://${rawHost}` : 'http://localhost:3000');
+        const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || 'http://localhost:3000';
         const resetLink = `${base}/reset-password.html?token=${token}`;
 
         // Configure dynamic transport
@@ -387,11 +385,13 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
                 }
             });
 
-            // Dynamically derive a valid sender email for o2switch using the request hostname
-            const host = req.get('host') || 'localhost';
-            const isValidHost = /^[a-zA-Z0-9.-]+(?::\d+)?$/.test(host);
-            const safeHost = isValidHost ? host : 'localhost';
-            const domain = safeHost.split(':')[0];
+            // Dynamically derive a valid sender email domain from PUBLIC_BASE_URL or fallback to localhost
+            let domain = 'localhost';
+            if (process.env.PUBLIC_BASE_URL) {
+                try {
+                    domain = new URL(process.env.PUBLIC_BASE_URL).hostname;
+                } catch (e) {}
+            }
             fromEmail = `"ShortR" <noreply@${domain}>`;
         }
 
@@ -640,7 +640,7 @@ app.post('/api/shorten', createLimiter, async (req, res) => {
 			finalMobileTarget
 		]);
 
-		const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
+		const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || 'http://localhost:3000';
 		const shortUrl = `${base}/${finalCode}`;
 		const qrUrl = `${base}/qr/${finalCode}.png`;
 
@@ -1125,10 +1125,9 @@ app.get('/:code', redirectionLimiter, async (req, res) => {
 		}
 
 		// UTM depuis la requête actuelle (si présents)
-		const u = new URL(req.protocol + '://' + req.get('host') + req.originalUrl);
-		const utm_source = u.searchParams.get('utm_source');
-		const utm_medium = u.searchParams.get('utm_medium');
-		const utm_campaign = u.searchParams.get('utm_campaign');
+		const utm_source = req.query.utm_source || null;
+		const utm_medium = req.query.utm_medium || null;
+		const utm_campaign = req.query.utm_campaign || null;
 
 		// On loggue de façon asynchrone sans bloquer la redirection
 		(async () => {
