@@ -13,6 +13,7 @@ import fetch from 'node-fetch';
 import { Parser } from 'json2csv';
 import xlsx from 'xlsx';
 import crypto from 'crypto';
+import net from 'net';
 
 dotenv.config();
 
@@ -38,6 +39,16 @@ function verifyUnlockToken(code, token) {
                                     .update(data)
                                     .digest('hex');
     return signature === expectedSignature;
+}
+
+function escapeHtml(unsafe) {
+    if (unsafe === null || unsafe === undefined) return '';
+    return String(unsafe)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 const app = express();
@@ -113,6 +124,53 @@ app.use(session({
   cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 24 * 7 } // 7 days
 }));
 
+// CSRF Token generation & sync middleware
+app.use((req, res, next) => {
+    if (req.session) {
+        if (!req.session.csrfToken) {
+            req.session.csrfToken = crypto.randomBytes(32).toString('hex');
+        }
+        res.cookie('XSRF-TOKEN', req.session.csrfToken, {
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 1000 * 60 * 60 * 24 * 7 // 7 days
+        });
+    }
+    next();
+});
+
+// CSRF Protection middleware
+function csrfProtection(req, res, next) {
+    const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
+    if (safeMethods.includes(req.method)) {
+        return next();
+    }
+
+    const publicEndpoints = [
+        '/api/auth/login',
+        '/api/auth/register',
+        '/api/auth/forgot-password',
+        '/api/auth/reset-password'
+    ];
+
+    if (publicEndpoints.includes(req.path) || req.path.startsWith('/api/unlock/')) {
+        return next();
+    }
+
+    // If it's a POST to /api/shorten and the user is NOT logged in (no userId), allow it without CSRF.
+    if (req.path === '/api/shorten' && !req.session.userId) {
+        return next();
+    }
+
+    const userToken = req.headers['x-csrf-token'];
+    if (!userToken || userToken !== req.session.csrfToken) {
+        return res.status(403).json({ error: 'Invalid or missing CSRF token' });
+    }
+    next();
+}
+
+app.use(csrfProtection);
+
 // Servir les fichiers statiques (public/index.html sera accessible à `/`)
 app.use(express.static('public'));
 
@@ -124,6 +182,30 @@ const createLimiter = rateLimit({
 	legacyHeaders: false,
 });
 
+const authLimiter = rateLimit({
+	windowMs: 60 * 1000, // 1 minute
+	max: 15,
+	message: { error: 'Too many requests, please try again later.' },
+	standardHeaders: true,
+	legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+	windowMs: 60 * 1000,
+	max: 100,
+	message: { error: 'Too many requests, please try again later.' },
+	standardHeaders: true,
+	legacyHeaders: false,
+});
+
+const redirectionLimiter = rateLimit({
+	windowMs: 60 * 1000,
+	max: 200,
+	message: 'Too many requests, please try again later.',
+	standardHeaders: true,
+	legacyHeaders: false,
+});
+
 function getClientIp(req) {
 	const xff = req.headers['x-forwarded-for'];
 	if (xff) return String(xff).split(',')[0].trim();
@@ -131,7 +213,7 @@ function getClientIp(req) {
 }
 
 // Auth routes
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
     try {
         const { email, password } = req.body;
         if (!email || !password || password.length < 8) {
@@ -150,7 +232,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-app.delete('/api/links/:code', async (req, res) => {
+app.delete('/api/links/:code', apiLimiter, async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -175,7 +257,7 @@ app.delete('/api/links/:code', async (req, res) => {
     }
 });
 
-app.put('/api/links/:code', async (req, res) => {
+app.put('/api/links/:code', apiLimiter, async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -211,7 +293,7 @@ app.put('/api/links/:code', async (req, res) => {
     }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
     try {
         const { email, password } = req.body;
         if (!email || !password) {
@@ -256,7 +338,7 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 // Forgot password / Request reset token
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
     try {
         const { email } = req.body;
         if (!email) {
@@ -271,7 +353,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         const expires = new Date(Date.now() + 3600000);
         await pool.query('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?', [token, expires, email]);
 
-        const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
+        const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || 'http://localhost:3000';
         const resetLink = `${base}/reset-password.html?token=${token}`;
 
         // Configure dynamic transport
@@ -303,9 +385,13 @@ app.post('/api/auth/forgot-password', async (req, res) => {
                 }
             });
 
-            // Dynamically derive a valid sender email for o2switch using the request hostname
-            const host = req.get('host') || 'localhost';
-            const domain = host.split(':')[0];
+            // Dynamically derive a valid sender email domain from PUBLIC_BASE_URL or fallback to localhost
+            let domain = 'localhost';
+            if (process.env.PUBLIC_BASE_URL) {
+                try {
+                    domain = new URL(process.env.PUBLIC_BASE_URL).hostname;
+                } catch (e) {}
+            }
             fromEmail = `"ShortR" <noreply@${domain}>`;
         }
 
@@ -390,11 +476,11 @@ app.post('/api/auth/forgot-password', async (req, res) => {
             <p>Vous avez demandé la réinitialisation de votre mot de passe pour votre compte ShortR.</p>
             <p>Veuillez cliquer sur le bouton ci-dessous pour réinitialiser votre mot de passe (ce lien est valable pendant 1 heure) :</p>
             <div style="text-align: center;">
-                <a href="${resetLink}" class="btn">Réinitialiser mon mot de passe</a>
+                <a href="${escapeHtml(resetLink)}" class="btn">Réinitialiser mon mot de passe</a>
             </div>
             <p style="font-size: 14px; color: #888888; word-break: break-all;">
                 Si le bouton ne fonctionne pas, copiez-collez le lien suivant dans votre navigateur :<br>
-                <a href="${resetLink}" style="color: #3b82f6;">${resetLink}</a>
+                <a href="${escapeHtml(resetLink)}" style="color: #3b82f6;">${escapeHtml(resetLink)}</a>
             </p>
             <p>Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email en toute sécurité.</p>
         </div>
@@ -416,13 +502,13 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         try {
             await transporter.sendMail(mailOptions);
             emailSent = true;
-            console.log(`Password reset email sent successfully to ${email}`);
+            console.log('Password reset email sent successfully to %s', email);
         } catch (mailError) {
-            console.error(`Failed to send password reset email to ${email}:`, mailError);
+            console.error('Failed to send password reset email to %s:', email, mailError);
         }
 
         // Always fallback log for development verification
-        console.log(`[DEVELOPMENT FALLBACK] Password reset requested for ${email}. Link: ${resetLink}`);
+        console.log('[DEVELOPMENT FALLBACK] Password reset requested for %s. Link: %s', email, resetLink);
 
         // Return a secure response (NO resetLink or token)
         res.json({ message: 'If this email is registered, a reset link has been sent.' });
@@ -433,7 +519,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 // Reset password using token
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
     try {
         const { token, password } = req.body;
         if (!token || !password || password.length < 8) {
@@ -453,7 +539,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 
-app.post('/api/unlock/:code', async (req, res) => {
+app.post('/api/unlock/:code', authLimiter, async (req, res) => {
     try {
         const { code } = req.params;
         const { password } = req.body;
@@ -554,7 +640,7 @@ app.post('/api/shorten', createLimiter, async (req, res) => {
 			finalMobileTarget
 		]);
 
-		const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
+		const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || 'http://localhost:3000';
 		const shortUrl = `${base}/${finalCode}`;
 		const qrUrl = `${base}/qr/${finalCode}.png`;
 
@@ -566,7 +652,7 @@ app.post('/api/shorten', createLimiter, async (req, res) => {
 });
 
 // QR Code PNG
-app.get('/qr/:code.png', async (req, res) => {
+app.get('/qr/:code.png', apiLimiter, async (req, res) => {
 	try {
 		const { code } = req.params;
 		if (!isValidCode(code)) return res.status(400).send('Bad code');
@@ -594,7 +680,7 @@ app.get('/qr/:code.png', async (req, res) => {
 });
 
 // User links
-app.get('/api/user/links', async (req, res) => {
+app.get('/api/user/links', apiLimiter, async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -611,10 +697,15 @@ app.get('/api/user/links', async (req, res) => {
 app.get('/health', (req, res) => res.json({ ok: true, at: new Date().toISOString() }));
 
 // Redirection + logging
-app.get('/:code', async (req, res) => {
+app.get('/:code', redirectionLimiter, async (req, res) => {
 	try {
 		const { code } = req.params;
 		if (!isValidCode(code)) return res.status(404).send('Not found');
+
+		let safeToken = '';
+		if (req.query.token && /^\d+:[a-f0-9]+$/.test(req.query.token)) {
+			safeToken = req.query.token;
+		}
 
 		const [[url]] = await pool.query('SELECT id, target, is_active, expires_at, max_clicks, password_hash, mobile_target FROM urls WHERE code = ?', [code]);
 		if (!url || !url.is_active) return res.status(404).send('Not found');
@@ -715,7 +806,7 @@ app.get('/:code', async (req, res) => {
 
 		// Check password protection
 		if (url.password_hash) {
-			const hasToken = req.query.token && verifyUnlockToken(code, req.query.token);
+			const hasToken = safeToken && verifyUnlockToken(code, safeToken);
 			if (!hasToken && (!req.session.unlockedLinks || !req.session.unlockedLinks[code])) {
 				const acceptLang = req.headers['accept-language'] || '';
 				const isFrench = acceptLang.toLowerCase().includes('fr');
@@ -999,13 +1090,13 @@ app.get('/:code', async (req, res) => {
                 ? "Vous quittez ShortR pour vous rendre sur le site externe suivant. Assurez-vous d'avoir confiance en cette URL avant de continuer :"
                 : "You are leaving ShortR to go to the following external site. Make sure you trust this URL before proceeding:"}
         </p>
-        <div class="url-box">${targetUrl}</div>
+        <div class="url-box">${escapeHtml(targetUrl)}</div>
 
         <button id="continue-btn" class="btn" disabled>
             ${isFrench ? 'Continuer dans 5s' : 'Continue in 5s'}
         </button>
 
-        <a href="/${code}?preview=skip${req.query.token ? '&token=' + req.query.token : ''}" class="skip-link">
+        <a href="/${escapeHtml(code)}?preview=skip${safeToken ? '&token=' + escapeHtml(safeToken) : ''}" class="skip-link">
             ${isFrench ? 'Passer le compte à rebours et continuer immédiatement' : 'Skip countdown and continue immediately'}
         </a>
     </div>
@@ -1022,7 +1113,7 @@ app.get('/:code', async (req, res) => {
                 btn.removeAttribute('disabled');
                 btn.textContent = isFr ? 'Continuer' : 'Continue';
                 btn.addEventListener('click', () => {
-                    window.location.href = '/${code}?preview=skip${req.query.token ? '&token=' + req.query.token : ''}';
+                    window.location.href = '/${escapeHtml(code)}?preview=skip${safeToken ? '&token=' + escapeHtml(safeToken) : ''}';
                 });
             } else {
                 btn.textContent = isFr ? 'Continuer dans ' + timeLeft + 's' : 'Continue in ' + timeLeft + 's';
@@ -1034,10 +1125,9 @@ app.get('/:code', async (req, res) => {
 		}
 
 		// UTM depuis la requête actuelle (si présents)
-		const u = new URL(req.protocol + '://' + req.get('host') + req.originalUrl);
-		const utm_source = u.searchParams.get('utm_source');
-		const utm_medium = u.searchParams.get('utm_medium');
-		const utm_campaign = u.searchParams.get('utm_campaign');
+		const utm_source = req.query.utm_source || null;
+		const utm_medium = req.query.utm_medium || null;
+		const utm_campaign = req.query.utm_campaign || null;
 
 		// On loggue de façon asynchrone sans bloquer la redirection
 		(async () => {
@@ -1046,7 +1136,7 @@ app.get('/:code', async (req, res) => {
 
 				// Localhost IPs for testing
 				const localIPs = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
-				if (ip && !localIPs.includes(ip)) {
+				if (ip && net.isIP(ip) && !localIPs.includes(ip)) {
 					const geo = await fetch(`http://ip-api.com/json/${ip}?fields=status,countryCode,lat,lon`).then(r => r.json());
 					if (geo && geo.status === 'success') {
 						countryCode = geo.countryCode;
@@ -1082,7 +1172,7 @@ function pickPort() {
 }
 
 // ===== Stats privées (pour l'utilisateur connecté) =====
-app.get('/api/stats-private/:code', async (req, res) => {
+app.get('/api/stats-private/:code', apiLimiter, async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -1182,7 +1272,7 @@ app.get('/api/stats-private/:code', async (req, res) => {
     }
 });
 
-app.get('/api/stats-private/:code/map', async (req, res) => {
+app.get('/api/stats-private/:code/map', apiLimiter, async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -1246,13 +1336,13 @@ async function handleExport(req, res, format) {
             res.send(buffer);
         }
     } catch (e) {
-        console.error(`Error exporting ${format}:`, e);
+        console.error('Error exporting %s:', format, e);
         res.status(500).json({ error: 'Server error during export' });
     }
 }
 
-app.get('/api/stats-private/:code/export/csv', (req, res) => handleExport(req, res, 'csv'));
-app.get('/api/stats-private/:code/export/xlsx', (req, res) => handleExport(req, res, 'xlsx'));
+app.get('/api/stats-private/:code/export/csv', apiLimiter, (req, res) => handleExport(req, res, 'csv'));
+app.get('/api/stats-private/:code/export/xlsx', apiLimiter, (req, res) => handleExport(req, res, 'xlsx'));
 
 
 // ===== Fin stats publiques =====
