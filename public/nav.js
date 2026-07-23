@@ -98,7 +98,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (logoutBtn) {
             logoutBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
-                await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+                function getCookie(name) {
+                    const value = `; ${document.cookie}`;
+                    const parts = value.split(`; ${name}=`);
+                    if (parts.length === 2) return parts.pop().split(';').shift();
+                    return '';
+                }
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: { 'X-CSRF-Token': getCookie('XSRF-TOKEN') },
+                    credentials: 'same-origin'
+                });
                 window.location.href = '/';
             });
         }
