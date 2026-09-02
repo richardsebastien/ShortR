@@ -6,7 +6,10 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  reporter: 'list',
+  reporter: [
+    ['html', { open: 'never' }],
+    ['list']
+  ],
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',

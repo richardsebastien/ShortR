@@ -11,18 +11,20 @@ test.describe('Dashboard and Link Management UI Flow', () => {
     context = await browser.newContext();
     page = await context.newPage();
 
-    // Register user once
+    // Handle alert on registration page
     page.on('dialog', async (dialog) => {
       if (dialog.type() === 'alert') {
-        await dialog.accept();
+        try {
+          await dialog.accept();
+        } catch (e) {}
       }
     });
+
     await page.goto('/register.html');
     await page.fill('#email', testEmail);
     await page.fill('#password', testPassword);
     await page.click('#f button');
 
-    // Login user once
     await page.goto('/login.html');
     await page.fill('#email', testEmail);
     await page.fill('#password', testPassword);
@@ -36,14 +38,12 @@ test.describe('Dashboard and Link Management UI Flow', () => {
 
   test('should list created link in user dashboard', async () => {
     const code = `list-${timestamp}`;
-    // Create a new link on home page
     await page.goto('/');
     await page.fill('#target', 'https://example.com/dashboard-test');
     await page.fill('#code', code);
     await page.click('#f button');
     await expect(page.locator('#result')).toBeVisible();
 
-    // Go to dashboard
     await page.goto('/dashboard.html');
     const row = page.locator(`tr[data-code="${code}"]`);
     await expect(row).toBeVisible();
@@ -60,12 +60,10 @@ test.describe('Dashboard and Link Management UI Flow', () => {
     await page.click('#f button');
     await expect(page.locator('#result')).toBeVisible();
 
-    // Go to dashboard
     await page.goto('/dashboard.html');
     const row = page.locator(`tr[data-code="${originalCode}"]`);
     await expect(row).toBeVisible();
 
-    // Handle prompt dialog for editing code
     page.once('dialog', async (dialog) => {
       expect(dialog.type()).toBe('prompt');
       await dialog.accept(newCode);
@@ -73,7 +71,6 @@ test.describe('Dashboard and Link Management UI Flow', () => {
 
     await row.locator('.edit-btn').click();
 
-    // Verify row is updated with new code
     const updatedRow = page.locator(`tr[data-code="${newCode}"]`);
     await expect(updatedRow).toBeVisible();
   });
@@ -91,7 +88,6 @@ test.describe('Dashboard and Link Management UI Flow', () => {
     const row = page.locator(`tr[data-code="${delCode}"]`);
     await expect(row).toBeVisible();
 
-    // Handle confirm dialog
     page.once('dialog', async (dialog) => {
       expect(dialog.type()).toBe('confirm');
       await dialog.accept();
