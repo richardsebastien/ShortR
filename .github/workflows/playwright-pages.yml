@@ -1,0 +1,82 @@
+name: Deploy Playwright Report to GitHub Pages
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  test-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mariadb:10.11
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: 'urlr'
+          MYSQL_USER: 'urlr'
+          MYSQL_PASSWORD: 'changeme'
+        ports:
+          - 3306:3306
+        options: --health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install MariaDB client
+        run: sudo apt-get update && sudo apt-get install -y mariadb-client
+
+      - name: Import Database Schemas
+        run: |
+          mariadb -h 127.0.0.1 -u urlr -pchangeme urlr < sql/001_init.sql
+          mariadb -h 127.0.0.1 -u urlr -pchangeme urlr < sql/002_add_users.sql
+          mariadb -h 127.0.0.1 -u urlr -pchangeme urlr < sql/003_add_reset_tokens.sql
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        env:
+          PORT: 3000
+          MYSQL_HOST: '127.0.0.1'
+          MYSQL_PORT: 3306
+          MYSQL_USER: 'urlr'
+          MYSQL_PASSWORD: 'changeme'
+          MYSQL_DB: 'urlr'
+          SESSION_SECRET: 'ci-session-secret-key-12345'
+          PUBLIC_BASE_URL: 'http://localhost:3000'
+        run: npm run test:e2e
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Playwright Report artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'playwright-report'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
