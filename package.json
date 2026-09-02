@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node app.js",
-    "dev": "node app.js"
+    "dev": "node app.js",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -21,5 +22,8 @@
     "nodemailer": "^9.0.3",
     "qrcode": "^1.5.3",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
   }
 }
