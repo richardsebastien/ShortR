@@ -208,7 +208,10 @@ const redirectionLimiter = rateLimit({
 
 function getClientIp(req) {
 	const xff = req.headers['x-forwarded-for'];
-	if (xff) return String(xff).split(',')[0].trim();
+	if (xff) {
+		const first = String(xff).split(',')[0].trim();
+		if (net.isIP(first)) return first;
+	}
 	return req.socket.remoteAddress || null;
 }
 
@@ -1137,7 +1140,7 @@ app.get('/:code', redirectionLimiter, async (req, res) => {
 				// Localhost IPs for testing
 				const localIPs = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
 				if (ip && net.isIP(ip) && !localIPs.includes(ip)) {
-					const geo = await fetch(`http://ip-api.com/json/${ip}?fields=status,countryCode,lat,lon`).then(r => r.json());
+					const geo = await fetch(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,countryCode,lat,lon`).then(r => r.json());
 					if (geo && geo.status === 'success') {
 						countryCode = geo.countryCode;
 						lat = geo.lat;
