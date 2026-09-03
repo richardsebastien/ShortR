@@ -16,7 +16,7 @@
     "express-session": "^1.18.0",
     "json2csv": "^6.0.0-alpha.2",
     "morgan": "^1.11.0",
-    "mysql2": "^3.11.0",
+    "mysql2": "^3.23.1",
     "nanoid": "^5.1.16",
     "node-fetch": "^3.3.2",
     "nodemailer": "^9.0.3",
