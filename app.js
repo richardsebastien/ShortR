@@ -3,6 +3,7 @@ import express from 'express';
 import morgan from 'morgan';
 import session from 'express-session';
 import { runMigrations } from './db.js';
+import { csrfTokenSync, csrfProtection } from './middlewares/csrf.middleware.js';
 
 // Import routers
 import authRouter from './routes/auth.routes.js';
@@ -42,6 +43,12 @@ app.use(session({
         maxAge: 1000 * 60 * 60 * 24 * 7 // 7 days
     }
 }));
+
+// CSRF Token generation & sync middleware
+app.use(csrfTokenSync);
+
+// CSRF Protection middleware
+app.use(csrfProtection);
 
 // Serve static files (public/index.html will be accessible at `/`)
 app.use(express.static('public'));

@@ -17,6 +17,7 @@ const translations = {
         "index.button.shorten": "Shorten",
         "cookie.banner.text": "We use cookies to improve your experience, remember preferences, and keep unlocked links active.",
         "cookie.banner.accept": "Accept",
+        "cookie.banner.refuse": "Refuse",
         "index.result.short_link": "Short link:",
         "index.result.stats": "See stats? Use the",
         "index.result.stats_link": "stats page",
@@ -66,6 +67,7 @@ const translations = {
         "index.button.shorten": "Raccourcir",
         "cookie.banner.text": "Nous utilisons des cookies pour améliorer votre expérience, mémoriser vos préférences et maintenir actifs les liens déverrouillés.",
         "cookie.banner.accept": "Accepter",
+        "cookie.banner.refuse": "Refuser",
         "index.result.short_link": "Lien court :",
         "index.result.stats": "Voir les stats ? Utilisez la",
         "index.result.stats_link": "page stats",
@@ -99,14 +101,20 @@ const translations = {
     }
 };
 
+let sessionLanguage = null;
+
 function setLanguage(lang) {
-    localStorage.setItem('language', lang);
+    sessionLanguage = lang;
+    if (localStorage.getItem('cookieConsent') === 'accepted') {
+        localStorage.setItem('language', lang);
+    }
     updateText();
 }
 
 function getDefaultLanguage() {
+    if (sessionLanguage) return sessionLanguage;
     const saved = localStorage.getItem('language');
-    if (saved) return saved;
+    if (saved && localStorage.getItem('cookieConsent') === 'accepted') return saved;
     const navLang = navigator.language || navigator.userLanguage || 'fr';
     const langCode = navLang.substring(0, 2).toLowerCase();
     return (langCode === 'fr') ? 'fr' : 'en';

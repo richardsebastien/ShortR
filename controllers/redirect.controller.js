@@ -1,8 +1,11 @@
 import { pool } from '../db.js';
 import QRCode from 'qrcode';
 import fetch from 'node-fetch';
+import net from 'net';
 import { getClientIp } from '../utils/ip.js';
 import { isValidCode } from '../utils/validate.js';
+import { escapeHtml } from '../utils/escape.js';
+import { verifyUnlockToken } from '../utils/tokens.js';
 
 export async function getQRCode(req, res) {
     try {
@@ -39,6 +42,11 @@ export async function resolveRedirect(req, res) {
     try {
         const { code } = req.params;
         if (!isValidCode(code)) return res.status(404).send('Not found');
+
+        let safeToken = '';
+        if (req.query.token && /^\d+:[a-f0-9]+$/.test(req.query.token)) {
+            safeToken = req.query.token;
+        }
 
         const [[url]] = await pool.query('SELECT id, target, is_active, expires_at, max_clicks, password_hash, mobile_target FROM urls WHERE code = ?', [code]);
         if (!url || !url.is_active) return res.status(404).send('Not found');
@@ -139,7 +147,8 @@ export async function resolveRedirect(req, res) {
 
         // Check password protection
         if (url.password_hash) {
-            if (!req.session.unlockedLinks || !req.session.unlockedLinks[code]) {
+            const hasToken = safeToken && verifyUnlockToken(code, safeToken);
+            if (!hasToken && (!req.session.unlockedLinks || !req.session.unlockedLinks[code])) {
                 const acceptLang = req.headers['accept-language'] || '';
                 const isFrench = acceptLang.toLowerCase().includes('fr');
                 return res.send(`<!DOCTYPE html>
@@ -266,15 +275,21 @@ export async function resolveRedirect(req, res) {
             const errorDiv = document.getElementById('error');
             errorDiv.style.display = 'none';
 
+            const refusedCookies = localStorage.getItem('cookieConsent') === 'refused';
+
             try {
                 const r = await fetch('/api/unlock/${code}', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password })
+                    body: JSON.stringify({ password, refusedCookies })
                 });
                 const data = await r.json();
                 if (r.ok) {
-                    window.location.reload();
+                    if (data.token) {
+                        window.location.href = '/${code}?token=' + data.token;
+                    } else {
+                        window.location.reload();
+                    }
                 } else {
                     errorDiv.textContent = data.error || '${isFrench ? "Erreur" : "Error"}';
                     errorDiv.style.display = 'block';
@@ -416,13 +431,13 @@ export async function resolveRedirect(req, res) {
                 ? "Vous quittez ShortR pour vous rendre sur le site externe suivant. Assurez-vous d'avoir confiance en cette URL avant de continuer :"
                 : "You are leaving ShortR to go to the following external site. Make sure you trust this URL before proceeding:"}
         </p>
-        <div class="url-box">${targetUrl}</div>
+        <div class="url-box">${escapeHtml(targetUrl)}</div>
 
         <button id="continue-btn" class="btn" disabled>
             ${isFrench ? 'Continuer dans 5s' : 'Continue in 5s'}
         </button>
 
-        <a href="/${code}?preview=skip" class="skip-link">
+        <a href="/${escapeHtml(code)}?preview=skip${safeToken ? '&token=' + escapeHtml(safeToken) : ''}" class="skip-link">
             ${isFrench ? 'Passer le compte à rebours et continuer immédiatement' : 'Skip countdown and continue immediately'}
         </a>
     </div>
@@ -439,7 +454,7 @@ export async function resolveRedirect(req, res) {
                 btn.removeAttribute('disabled');
                 btn.textContent = isFr ? 'Continuer' : 'Continue';
                 btn.addEventListener('click', () => {
-                    window.location.href = '/${code}?preview=skip';
+                    window.location.href = '/${escapeHtml(code)}?preview=skip${safeToken ? '&token=' + escapeHtml(safeToken) : ''}';
                 });
             } else {
                 btn.textContent = isFr ? 'Continuer dans ' + timeLeft + 's' : 'Continue in ' + timeLeft + 's';
@@ -450,11 +465,10 @@ export async function resolveRedirect(req, res) {
 </html>`);
         }
 
-        // UTM and click logging
-        const u = new URL(req.protocol + '://' + req.get('host') + req.originalUrl);
-        const utm_source = u.searchParams.get('utm_source');
-        const utm_medium = u.searchParams.get('utm_medium');
-        const utm_campaign = u.searchParams.get('utm_campaign');
+        // UTM params
+        const utm_source = req.query.utm_source || null;
+        const utm_medium = req.query.utm_medium || null;
+        const utm_campaign = req.query.utm_campaign || null;
 
         (async () => {
             try {
@@ -462,8 +476,8 @@ export async function resolveRedirect(req, res) {
 
                 // Localhost IPs for testing
                 const localIPs = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
-                if (ip && !localIPs.includes(ip)) {
-                    const geo = await fetch(`http://ip-api.com/json/${ip}?fields=status,countryCode,lat,lon`).then(r => r.json());
+                if (ip && net.isIP(ip) && !localIPs.includes(ip)) {
+                    const geo = await fetch(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,countryCode,lat,lon`).then(r => r.json());
                     if (geo && geo.status === 'success') {
                         countryCode = geo.countryCode;
                         lat = geo.lat;
