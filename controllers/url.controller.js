@@ -3,7 +3,6 @@ import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 import { isValidUrl, isValidCode } from '../utils/validate.js';
 import { getClientIp } from '../utils/ip.js';
-import { createUnlockToken } from '../utils/tokens.js';
 
 export async function deleteLink(req, res) {
     try {
@@ -76,11 +75,6 @@ export async function unlockLink(req, res) {
         const matches = await bcrypt.compare(password, url.password_hash);
         if (!matches) {
             return res.status(401).json({ error: 'Incorrect password' });
-        }
-
-        if (req.body.refusedCookies) {
-            const token = createUnlockToken(code);
-            return res.json({ success: true, message: 'Link unlocked (stateless)', token });
         }
 
         if (!req.session.unlockedLinks) {
@@ -159,7 +153,7 @@ export async function shortenLink(req, res) {
             finalMobileTarget
         ]);
 
-        const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || 'http://localhost:3000';
+        const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
         const shortUrl = `${base}/${finalCode}`;
         const qrUrl = `${base}/qr/${finalCode}.png`;
 

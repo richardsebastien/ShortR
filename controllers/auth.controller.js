@@ -2,7 +2,6 @@ import { pool } from '../db.js';
 import bcrypt from 'bcryptjs';
 import { nanoid } from 'nanoid';
 import nodemailer from 'nodemailer';
-import { escapeHtml } from '../utils/escape.js';
 
 export async function register(req, res) {
     try {
@@ -82,7 +81,7 @@ export async function forgotPassword(req, res) {
         const expires = new Date(Date.now() + 3600000);
         await pool.query('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?', [token, expires, email]);
 
-        const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || 'http://localhost:3000';
+        const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, '') || `${req.protocol}://${req.get('host')}`;
         const resetLink = `${base}/reset-password.html?token=${token}`;
 
         // Configure dynamic transport
@@ -114,12 +113,9 @@ export async function forgotPassword(req, res) {
                 }
             });
 
-            let domain = 'localhost';
-            if (process.env.PUBLIC_BASE_URL) {
-                try {
-                    domain = new URL(process.env.PUBLIC_BASE_URL).hostname;
-                } catch (e) {}
-            }
+            // Dynamically derive a valid sender email for o2switch using the request hostname
+            const host = req.get('host') || 'localhost';
+            const domain = host.split(':')[0];
             fromEmail = `"ShortR" <noreply@${domain}>`;
         }
 
@@ -204,11 +200,11 @@ export async function forgotPassword(req, res) {
             <p>Vous avez demandé la réinitialisation de votre mot de passe pour votre compte ShortR.</p>
             <p>Veuillez cliquer sur le bouton ci-dessous pour réinitialiser votre mot de passe (ce lien est valable pendant 1 heure) :</p>
             <div style="text-align: center;">
-                <a href="${escapeHtml(resetLink)}" class="btn">Réinitialiser mon mot de passe</a>
+                <a href="${resetLink}" class="btn">Réinitialiser mon mot de passe</a>
             </div>
             <p style="font-size: 14px; color: #888888; word-break: break-all;">
                 Si le bouton ne fonctionne pas, copiez-collez le lien suivant dans votre navigateur :<br>
-                <a href="${escapeHtml(resetLink)}" style="color: #3b82f6;">${escapeHtml(resetLink)}</a>
+                <a href="${resetLink}" style="color: #3b82f6;">${resetLink}</a>
             </p>
             <p>Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email en toute sécurité.</p>
         </div>
@@ -227,13 +223,13 @@ export async function forgotPassword(req, res) {
 
         try {
             await transporter.sendMail(mailOptions);
-            console.log('Password reset email sent successfully to %s', email);
+            console.log(`Password reset email sent successfully to ${email}`);
         } catch (mailError) {
-            console.error('Failed to send password reset email to %s:', email, mailError);
+            console.error(`Failed to send password reset email to ${email}:`, mailError);
         }
 
         // Always fallback log for development verification
-        console.log('[DEVELOPMENT FALLBACK] Password reset requested for %s. Link: %s', email, resetLink);
+        console.log(`[DEVELOPMENT FALLBACK] Password reset requested for ${email}. Link: ${resetLink}`);
 
         // Return a secure response (NO resetLink or token)
         res.json({ message: 'If this email is registered, a reset link has been sent.' });
